@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use App\Http\Controllers\QuoteController;
 
 Route::get('/', function () {
     // If user is already authenticated, redirect to dashboard
@@ -91,7 +92,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         if ($widget->company_id !== auth()->user()->company_id) {
             abort(403);
         }
-        
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'service_category' => 'required|string',
@@ -109,11 +110,34 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'settings.minimum_job_price' => 'required|numeric|min:0',
             'settings.show_price_ranges' => 'required|boolean',
         ]);
-        
+
         $widget->update($validated);
-        
+
         return redirect()->route('dashboard')->with('success', 'Widget updated successfully!');
     })->name('widgets.update');
+
+    // Widget preview route - visualize and test your widget
+    Route::get('widgets/{widget}/preview', function (\App\Models\Widget $widget) {
+        // Ensure the widget belongs to the user's company
+        if ($widget->company_id !== auth()->user()->company_id) {
+            abort(403);
+        }
+
+        $widgetConfig = $widget->getConfigurationArray();
+
+        return Inertia::render('widgets/preview', [
+            'widget' => [
+                'id' => $widget->id,
+                'name' => $widget->name,
+                'widget_key' => $widget->widget_key,
+                'status' => $widget->status,
+            ],
+            'config' => $widgetConfig,
+        ]);
+    })->name('widgets.preview');
+
+    // Send quote via Resend
+    Route::post('quotes/send', [QuoteController::class, 'send'])->name('quotes.send');
 });
 
 require __DIR__.'/settings.php';

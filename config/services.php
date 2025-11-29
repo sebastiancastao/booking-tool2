@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'gravity_forms' => [
+        'base_url' => env('GRAVITY_FORMS_BASE_URL', 'https://www.atlantafurnituremovers.com/gravityformsapi'),
+        'public_key' => env('GRAVITY_FORMS_PUBLIC_KEY', '0b7fbd1824'),
+        'private_key' => env('GRAVITY_FORMS_PRIVATE_KEY', '27842c3fdf765bd'),
+        'form_id' => env('GRAVITY_FORMS_FORM_ID', '3'),
+    ],
+
 ];

@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Zap, Target, TrendingUp, Users, BarChart3, ArrowRight, Sparkles, Code, Copy, X, ExternalLink } from 'lucide-react';
+import { Plus, Zap, Target, TrendingUp, Users, BarChart3, ArrowRight, Sparkles, Code, Copy, X, ExternalLink, Eye } from 'lucide-react';
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -276,8 +276,17 @@ export default function ChalkDashboard({ user, widgets = [], widgetCount = 0, le
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center space-x-2">
-                                                    <Button 
-                                                        variant="outline" 
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => window.location.href = route('widgets.preview', { widget: widget.id })}
+                                                        className="flex items-center"
+                                                    >
+                                                        <Eye className="w-4 h-4 mr-1" />
+                                                        Preview
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
                                                         size="sm"
                                                         onClick={() => setSelectedWidgetForApi(widget)}
                                                         className="flex items-center"
@@ -285,8 +294,8 @@ export default function ChalkDashboard({ user, widgets = [], widgetCount = 0, le
                                                         <Code className="w-4 h-4 mr-1" />
                                                         API
                                                     </Button>
-                                                    <Button 
-                                                        variant="outline" 
+                                                    <Button
+                                                        variant="outline"
                                                         size="sm"
                                                         onClick={() => window.location.href = route('widgets.edit', { widget: widget.id })}
                                                     >

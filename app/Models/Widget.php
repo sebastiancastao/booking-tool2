@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,6 +10,7 @@ use Illuminate\Support\Str;
 
 class Widget extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'company_id',
         'name',
@@ -204,6 +206,27 @@ class Widget extends Model
                     'minimum_distance' => floatval($moduleConfig['minimum_distance'] ?? 0)
                 ]
             ];
+        }
+
+        // Supply selection uses categories/items instead of direct options
+        if ($moduleKey === 'supply-selection' && isset($moduleConfig['categories']) && is_array($moduleConfig['categories'])) {
+            foreach ($moduleConfig['categories'] as $categoryIndex => $category) {
+                $items = $category['items'] ?? [];
+                foreach ($items as $itemIndex => $item) {
+                    $options[] = [
+                        'id' => 'supply_' . $categoryIndex . '_' . $itemIndex,
+                        'value' => $item['name'] ?? '',
+                        'title' => $item['name'] ?? '',
+                        'description' => $item['description'] ?? ($category['name'] ?? 'Supplies'),
+                        'icon' => $category['icon'] ?? null,
+                        'type' => 'supply',
+                        'estimation' => [
+                            'pricing_type' => 'fixed',
+                            'pricing_value' => floatval($item['price'] ?? 0)
+                        ]
+                    ];
+                }
+            }
         }
 
         return $options;
