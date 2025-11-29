@@ -1,5 +1,5 @@
 import { Head, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Eye, Code, Smartphone, Monitor, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -20,6 +20,7 @@ interface WidgetPreviewProps {
 export default function WidgetPreview({ widget, config }: WidgetPreviewProps) {
     const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop');
     const [showCode, setShowCode] = useState(false);
+    const [iframeEmbedUrl, setIframeEmbedUrl] = useState('');
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Dashboard', href: '/dashboard' },
@@ -45,6 +46,22 @@ export default function WidgetPreview({ widget, config }: WidgetPreviewProps) {
     const copyEmbedCode = () => {
         navigator.clipboard.writeText(embedCode);
         alert('Embed code copied to clipboard!');
+    };
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            setIframeEmbedUrl(`${window.location.origin}/widgets/${widget.widget_key}/embed`);
+        }
+    }, [widget.widget_key]);
+
+    const iframeEmbedCode = iframeEmbedUrl
+        ? `<iframe src="${iframeEmbedUrl}" width="420" height="720" frameborder="0" sandbox="allow-forms allow-scripts allow-same-origin"></iframe>`
+        : '';
+
+    const copyIframeEmbedCode = () => {
+        if (!iframeEmbedCode) return;
+        navigator.clipboard.writeText(iframeEmbedCode);
+        alert('Iframe embed code copied to clipboard!');
     };
 
     return (
@@ -190,6 +207,28 @@ export default function WidgetPreview({ widget, config }: WidgetPreviewProps) {
                         </div>
                     </div>
                 </Card>
+
+            <Card className="p-6 bg-gray-50 border border-gray-200">
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 className="font-semibold text-lg text-gray-900">Iframe embed</h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                            Drop this iframe into any page to load your widget preview while keeping the session and CSRF cookies intact.
+                        </p>
+                    </div>
+                    <Button onClick={copyIframeEmbedCode} size="sm" disabled={!iframeEmbedCode}>
+                        Copy iframe
+                    </Button>
+                </div>
+                <div className="mt-4">
+                    <pre className="bg-gray-900 text-gray-100 text-sm rounded-lg overflow-x-auto p-4">
+                        <code>{iframeEmbedCode || 'Widget embed URL will appear once the preview loads.'}</code>
+                    </pre>
+                    <p className="text-xs text-gray-500 mt-2">
+                        Use `sandbox="allow-forms allow-scripts allow-same-origin"` to keep the iframe isolated.
+                    </p>
+                </div>
+            </Card>
 
                 {/* Configuration summary */}
                 <Card className="p-6">

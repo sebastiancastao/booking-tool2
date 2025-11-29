@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\QuoteController;
+use App\Http\Controllers\WidgetEmbedController;
 
 Route::get('/', function () {
     // If user is already authenticated, redirect to dashboard
@@ -16,6 +17,8 @@ Route::get('/', function () {
         'status' => session('status'),
     ]);
 })->name('home');
+
+Route::get('widgets/{widgetKey}/embed', [WidgetEmbedController::class, 'show'])->name('widgets.embed');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
