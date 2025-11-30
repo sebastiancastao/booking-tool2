@@ -21,8 +21,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Set the application URL for containers that rely on APP_URL
-ENV APP_URL=https://authentic-essence-production.up.railway.app
+# Allow overriding APP_URL at build or runtime (default is localhost)
+ARG APP_URL=https://booking-tool2.onrender.com
+ENV APP_URL=${APP_URL}
 
 # Copy application files
 COPY . .
