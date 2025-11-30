@@ -64,6 +64,13 @@ class GravityFormsService
         // Map form data to Gravity Forms field structure
         $fieldData = $this->mapFormDataToGravityFields($formData);
 
+        $submissionStart = microtime(true);
+        Log::info('Gravity Forms submission request', [
+            'form_id' => $this->formId,
+            'field_keys' => array_keys($fieldData),
+            'input_count' => count($fieldData),
+        ]);
+
         try {
             $response = Http::asJson() // Gravity Forms expects JSON body
                 ->timeout(15)
@@ -71,6 +78,13 @@ class GravityFormsService
                 ->post($auth['url'], $fieldData);
 
             $result = $response->json();
+            $submissionDurationMs = round((microtime(true) - $submissionStart) * 1000);
+            Log::info('Gravity Forms API response', [
+                'form_id' => $this->formId,
+                'status' => $response->status(),
+                'duration_ms' => $submissionDurationMs,
+                'is_valid' => $result['response']['is_valid'] ?? null,
+            ]);
             if (!$result || !is_array($result)) {
                 $rawBody = $response->body();
                 Log::error('Gravity Forms submission failed - empty or invalid JSON response', [

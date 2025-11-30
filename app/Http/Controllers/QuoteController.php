@@ -70,6 +70,13 @@ class QuoteController extends Controller
 
         $htmlBody = implode("\n", $htmlLines);
 
+        $resendStart = microtime(true);
+        Log::info('Resend email request started', [
+            'widget_key' => $payload['widget_key'] ?? null,
+            'summary_items' => count($items),
+            'timestamp' => now()->toIso8601String(),
+        ]);
+
         $response = Http::withToken($resendKey)
             ->acceptJson()
             ->timeout(15)
@@ -80,6 +87,13 @@ class QuoteController extends Controller
                 'subject' => 'New moving quote request',
                 'html' => $htmlBody,
             ]);
+
+        $resendDurationMs = round((microtime(true) - $resendStart) * 1000);
+        Log::info('Resend email response', [
+            'status' => $response->status(),
+            'duration_ms' => $resendDurationMs,
+            'successful' => $response->successful(),
+        ]);
 
         if (!$response->successful()) {
             Log::error('Resend email failed', [
@@ -93,6 +107,10 @@ class QuoteController extends Controller
         $gravityFormsSubmitted = false;
         $gravityFormsData = null;
         $gravityFormsError = null;
+
+        Log::info('Gravity Forms submission starting', [
+            'widget_key' => $payload['widget_key'] ?? null,
+        ]);
 
         try {
             $gravityFormsService = new GravityFormsService();
