@@ -31,5 +31,4 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-di
 RUN npm install && npm run build
 
 EXPOSE 9000
-
-CMD ["php-fpm"]
+CMD ["php-fpm", "-F"]
