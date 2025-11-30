@@ -24,6 +24,9 @@ WORKDIR /var/www/html
 # Copy application files
 COPY . .
 
+# Apply PHP configuration overrides
+COPY docker/php/conf.d/chalk.ini /usr/local/etc/php/conf.d/90-chalk.ini
+
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
