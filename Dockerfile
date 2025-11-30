@@ -9,9 +9,11 @@ RUN apt-get update && apt-get install -y \
     zip \
     zlib1g-dev \
     libonig-dev \
+    libpq-dev \
     ca-certificates \
     curl \
     && docker-php-ext-install intl zip bcmath pcntl \
+    && docker-php-ext-install pdo_pgsql pgsql \
     && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
