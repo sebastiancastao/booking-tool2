@@ -21,6 +21,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
+# Set the application URL for containers that rely on APP_URL
+ENV APP_URL=https://authentic-essence-production.up.railway.app
+
 # Copy application files
 COPY . .
 
@@ -33,5 +36,6 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-di
 # Build frontend assets
 RUN npm install && npm run build
 
-EXPOSE 9000
-CMD ["php-fpm", "-F"]
+EXPOSE 8000
+# php artisan serve listens for HTTP traffic on Railway's PORT
+CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"]
