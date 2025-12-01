@@ -31,6 +31,9 @@ export async function getAddressPredictions(
         const params = new URLSearchParams({
             input: query,
             sessiontoken: token,
+            components: 'country:us', // Restrict to USA
+            location: '33.7490,-84.3880', // Atlanta, GA coordinates for bias
+            radius: '100000', // 100km radius to prioritize Georgia
         });
 
         const baseUrl = getApiBaseUrl();
@@ -107,12 +110,24 @@ export async function fetchPlaceDetails(
         const result = data.result || {};
         let postalCode: string | undefined;
         const components = result.address_components || [];
+
+        // Extract postal code from address components
         for (const component of components) {
             if (component.types && component.types.includes('postal_code')) {
                 postalCode = component.long_name || component.short_name;
                 break;
             }
         }
+
+        // If no postal code found, try to extract from formatted address
+        if (!postalCode && result.formatted_address) {
+            const match = result.formatted_address.match(/\b(\d{5})(?:-\d{4})?\b/);
+            if (match) {
+                postalCode = match[1];
+            }
+        }
+
+        console.log('Extracted postal code:', postalCode);
 
         return {
             formatted_address: result.formatted_address,

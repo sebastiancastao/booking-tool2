@@ -32,16 +32,31 @@ class PlacesController extends Controller
         }
 
         try {
+            $params = [
+                'input' => $request->input,
+                'key' => $apiKey,
+                'sessiontoken' => $request->sessiontoken ?? '',
+                'types' => 'address',
+            ];
+
+            // Add country restriction if provided
+            if ($request->has('components')) {
+                $params['components'] = $request->components;
+            }
+
+            // Add location bias if provided (for Georgia bias)
+            if ($request->has('location')) {
+                $params['location'] = $request->location;
+            }
+            if ($request->has('radius')) {
+                $params['radius'] = $request->radius;
+            }
+
             $response = Http::timeout(10)
                 ->withOptions([
                     'verify' => false, // Disable SSL verification for local development
                 ])
-                ->get('https://maps.googleapis.com/maps/api/place/autocomplete/json', [
-                    'input' => $request->input,
-                    'key' => $apiKey,
-                    'sessiontoken' => $request->sessiontoken ?? '',
-                    'types' => 'address',
-                ]);
+                ->get('https://maps.googleapis.com/maps/api/place/autocomplete/json', $params);
 
             if (!$response->successful()) {
                 return response()->json([
