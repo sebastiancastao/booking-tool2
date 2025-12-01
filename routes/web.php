@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\WidgetEmbedController;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 
 Route::get('/', function () {
     // If user is already authenticated, redirect to dashboard
@@ -19,6 +20,9 @@ Route::get('/', function () {
 })->name('home');
 
 Route::get('widgets/{widgetKey}/embed', [WidgetEmbedController::class, 'show'])->name('widgets.embed');
+Route::post('quotes/send', [QuoteController::class, 'send'])
+    ->name('quotes.send')
+    ->withoutMiddleware([VerifyCsrfToken::class]); // Public endpoint for widget submissions; CSRF exempt for cross-origin embeds
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
@@ -138,9 +142,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'config' => $widgetConfig,
         ]);
     })->name('widgets.preview');
-
-    // Send quote via Resend
-    Route::post('quotes/send', [QuoteController::class, 'send'])->name('quotes.send');
 });
 
 require __DIR__.'/settings.php';

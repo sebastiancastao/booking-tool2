@@ -25,11 +25,12 @@ class WidgetEmbedController extends Controller
                 'widget_key' => $widget->widget_key,
             ],
             'config' => $config,
-        ]);
+        ])->toResponse($request);
 
-        return $response->toResponse($request)->withHeaders([
-            'X-Frame-Options' => 'ALLOWALL',
-            'Content-Security-Policy' => 'frame-ancestors *',
-        ]);
+        // Allow the widget to be framed (e.g. inside WordPress) and submit forms
+        $response->headers->remove('X-Frame-Options');
+        $response->headers->set('Content-Security-Policy', 'frame-ancestors *');
+
+        return $response;
     }
 }
