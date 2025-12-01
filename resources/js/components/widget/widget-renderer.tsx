@@ -38,7 +38,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { geocodeDistance } from '@/lib/mapbox';
 import {
-    loadGooglePlaces,
     getAddressPredictions,
     fetchPlaceDetails,
     createSessionToken,
@@ -249,15 +248,15 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
 
         setPlacesLoading(true);
         try {
-            await loadGooglePlaces().catch(() => {}); // optional load; REST fallback below
+            // Using backend proxy, no need to load Google Places JS library
             setPlacesReady(true);
             setPlacesError(null);
             setPlacesSession((prev) => prev ?? createSessionToken());
             return true;
         } catch (err: any) {
-            console.error('Google Places failed to load', err);
+            console.error('Places initialization failed', err);
             setPlacesReady(false);
-            setPlacesError(err?.message || 'Google address autocomplete unavailable.');
+            setPlacesError(err?.message || 'Address autocomplete unavailable.');
             return false;
         } finally {
             setPlacesLoading(false);
@@ -330,7 +329,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
         let postalCode: string | null = null;
 
         try {
-            const details = await fetchPlaceDetails(prediction.place_id, placesSession || undefined);
+            const details = await fetchPlaceDetails(prediction.place_id);
             formatted = details?.formatted_address || formatted;
             postalCode = details?.postal_code || extractZipFromText(details?.formatted_address) || null;
         } catch (err) {

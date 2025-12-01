@@ -1,54 +1,3 @@
-declare global {
-    interface Window {
-        google?: any;
-    }
-}
-
-let loaderPromise: Promise<any> | null = null;
-
-function getGoogleKey(): string | undefined {
-    return import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_GOOGLE_PLACES_API_KEY;
-}
-
-export function loadGooglePlaces(): Promise<any> {
-    if (typeof window === 'undefined') {
-        return Promise.reject(new Error('Google Places requires a browser environment.'));
-    }
-
-    const existing = window.google;
-    if (existing?.maps?.places) {
-        return Promise.resolve(existing);
-    }
-
-    if (loaderPromise) {
-        return loaderPromise;
-    }
-
-    const key = getGoogleKey();
-    if (!key) {
-        return Promise.reject(new Error('Missing Google Maps Places API key (VITE_GOOGLE_MAPS_API_KEY).'));
-    }
-
-    loaderPromise = new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&language=en`;
-        script.async = true;
-        script.defer = true;
-        script.onload = () => {
-            const google = window.google;
-            if (google?.maps?.places) {
-                resolve(google);
-            } else {
-                reject(new Error('Google Maps Places failed to load.'));
-            }
-        };
-        script.onerror = () => reject(new Error('Unable to load Google Maps Places script.'));
-        document.head.appendChild(script);
-    });
-
-    return loaderPromise;
-}
-
 export function createSessionToken(): string {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
         return crypto.randomUUID();
@@ -56,81 +5,98 @@ export function createSessionToken(): string {
     return Math.random().toString(36).slice(2);
 }
 
-const PLACES_AUTOCOMPLETE_URL = 'https://places.googleapis.com/v1/places:autocomplete';
-const PLACES_DETAILS_URL = 'https://places.googleapis.com/v1/places/';
-
 export async function getAddressPredictions(
     query: string,
     sessionToken?: string
 ): Promise<Array<{ description: string; place_id: string }>> {
-    const key = getGoogleKey();
-    if (!key) throw new Error('Missing Google Maps Places API key.');
-
+    console.log('Getting address predictions for:', query);
     const token = sessionToken || createSessionToken();
-    const res = await fetch(PLACES_AUTOCOMPLETE_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': key,
-            'X-Goog-FieldMask': 'place_prediction.place_id,place_prediction.text',
-        },
-        body: JSON.stringify({
+
+    try {
+        const params = new URLSearchParams({
             input: query,
-            sessionToken: token,
-            types: ['address'],
-        }),
-    });
+            sessiontoken: token,
+        });
 
-    if (!res.ok) {
-        throw new Error('Places autocomplete request failed');
+        const res = await fetch(`/api/places/autocomplete?${params.toString()}`, {
+            method: 'GET',
+            credentials: 'same-origin',
+        });
+
+        if (!res.ok) {
+            const errorText = await res.text();
+            console.error('Places autocomplete failed:', res.status, errorText);
+            throw new Error(`Places autocomplete request failed: ${res.status} ${errorText}`);
+        }
+
+        const data = await res.json();
+        console.log('Places API response:', data);
+
+        if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+            console.error('Places API error:', data.status, data.error_message);
+            throw new Error(`Places API error: ${data.status} ${data.error_message || ''}`);
+        }
+
+        const predictions = (data.predictions || [])
+            .map((prediction: { place_id?: string; description?: string }) => ({
+                description: prediction.description || '',
+                place_id: prediction.place_id || '',
+            }))
+            .filter((p: { place_id: string; description: string }) => p && p.place_id && p.description);
+
+        console.log('Parsed predictions:', predictions);
+        return predictions;
+    } catch (error) {
+        console.error('Error in getAddressPredictions:', error);
+        throw error;
     }
-    const data = await res.json();
-    const predictions = data.placePredictions || data.place_predictions || [];
-
-    return predictions
-        .map((prediction: any) => ({
-            description:
-                prediction?.text?.text ||
-                prediction?.structured_formatting?.main_text ||
-                prediction?.description ||
-                '',
-            place_id: prediction?.placeId || prediction?.place_id,
-        }))
-        .filter((p: any) => p.place_id && p.description);
 }
 
 export async function fetchPlaceDetails(
-    placeId: string,
-    sessionToken?: string
+    placeId: string
 ): Promise<{ formatted_address?: string; postal_code?: string }> {
-    const key = getGoogleKey();
-    if (!key) throw new Error('Missing Google Maps Places API key.');
-    const token = sessionToken || createSessionToken();
+    console.log('Fetching place details for:', placeId);
 
-    const res = await fetch(`${PLACES_DETAILS_URL}${encodeURIComponent(placeId)}?sessionToken=${token}`, {
-        method: 'GET',
-        headers: {
-            'X-Goog-Api-Key': key,
-            'X-Goog-FieldMask': 'formattedAddress,addressComponents',
-        },
-    });
+    try {
+        const params = new URLSearchParams({
+            place_id: placeId,
+        });
 
-    if (!res.ok) {
-        throw new Error('Places details request failed');
-    }
-    const data = await res.json();
+        const res = await fetch(`/api/places/details?${params.toString()}`, {
+            method: 'GET',
+            credentials: 'same-origin',
+        });
 
-    let postalCode: string | undefined;
-    const components = data.addressComponents || data.address_components || [];
-    for (const component of components) {
-        if (component.types && component.types.includes('postal_code')) {
-            postalCode = component.long_name || component.longName || component.shortName || component.short_name;
-            break;
+        if (!res.ok) {
+            const errorText = await res.text();
+            console.error('Places details failed:', res.status, errorText);
+            throw new Error(`Places details request failed: ${res.status}`);
         }
-    }
 
-    return {
-        formatted_address: data.formattedAddress || data.formatted_address,
-        postal_code: postalCode,
-    };
+        const data = await res.json();
+        console.log('Place details response:', data);
+
+        if (data.status !== 'OK') {
+            console.error('Places API error:', data.status, data.error_message);
+            throw new Error(`Places API error: ${data.status} ${data.error_message || ''}`);
+        }
+
+        const result = data.result || {};
+        let postalCode: string | undefined;
+        const components = result.address_components || [];
+        for (const component of components) {
+            if (component.types && component.types.includes('postal_code')) {
+                postalCode = component.long_name || component.short_name;
+                break;
+            }
+        }
+
+        return {
+            formatted_address: result.formatted_address,
+            postal_code: postalCode,
+        };
+    } catch (error) {
+        console.error('Error in fetchPlaceDetails:', error);
+        throw error;
+    }
 }

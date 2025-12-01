@@ -42,4 +42,8 @@ return [
         'form_id' => env('GRAVITY_FORMS_FORM_ID', '3'),
     ],
 
+    'google' => [
+        'maps_api_key' => env('VITE_GOOGLE_MAPS_API_KEY'),
+    ],
+
 ];
