@@ -260,6 +260,50 @@ class GravityFormsService
             ? substr($digitsPhone, -10)
             : $rawPhone;
 
+        $geocodeZipFromAddress = function (?string $address): ?string {
+            if (!$address || !is_string($address)) {
+                return null;
+            }
+
+            $apiKey = config('services.google.maps_api_key');
+            if (!$apiKey) {
+                return null;
+            }
+
+            try {
+                $response = Http::timeout(10)
+                    ->withOptions(['verify' => false])
+                    ->get('https://maps.googleapis.com/maps/api/geocode/json', [
+                        'address' => $address,
+                        'key' => $apiKey,
+                        'components' => 'country:US',
+                    ]);
+
+                if (!$response->successful()) {
+                    return null;
+                }
+
+                $geoData = $response->json();
+                if ($geoData['status'] !== 'OK' || !isset($geoData['results'][0])) {
+                    return null;
+                }
+
+                foreach ($geoData['results'][0]['address_components'] ?? [] as $component) {
+                    if (in_array('postal_code', $component['types'] ?? [])) {
+                        return $component['long_name'] ?? $component['short_name'] ?? null;
+                    }
+                }
+
+                return null;
+            } catch (\Exception $e) {
+                Log::warning('Failed to geocode address for ZIP extraction', [
+                    'address' => $address,
+                    'error' => $e->getMessage(),
+                ]);
+                return null;
+            }
+        };
+
         $fromZip = $extractZipFromKeys([
             'fromZip', 'from-zip', 'from_zip', 'from_zip_code', 'fromZipCode',
             'origin-zip', 'origin_zip', 'origin_zip_code', 'origin-zip-code', 'originZip',
@@ -269,7 +313,9 @@ class GravityFormsService
             'pickupPostalCode',
         ]) ?? $extractZip($originAddress)
             ?? $extractZip($distanceOrigin)
-            ?? $searchZipByKeywords(['from', 'origin', 'pickup']);
+            ?? $searchZipByKeywords(['from', 'origin', 'pickup'])
+            ?? $geocodeZipFromAddress($originAddress)
+            ?? $geocodeZipFromAddress($distanceOrigin);
 
         $toZip = $extractZipFromKeys([
             'toZip', 'to-zip', 'to_zip', 'to_zip_code', 'toZipCode',
@@ -280,7 +326,9 @@ class GravityFormsService
             'postal_to', 'destination-postal', 'dropoffPostalCode',
         ]) ?? $extractZip($targetAddress)
             ?? $extractZip($distanceDestination)
-            ?? $searchZipByKeywords(['to', 'target', 'destination', 'dropoff', 'delivery']);
+            ?? $searchZipByKeywords(['to', 'target', 'destination', 'dropoff', 'delivery'])
+            ?? $geocodeZipFromAddress($targetAddress)
+            ?? $geocodeZipFromAddress($distanceDestination);
 
         // As a final fallback, reuse any zip codes we can find in the payload to avoid Gravity Forms validation errors
         $allZips = $collectAllZips();
@@ -324,6 +372,16 @@ class GravityFormsService
             return $value;
         };
         $moveSize = $normalizeMoveSize($moveSizeRaw);
+
+        // Debug logging for ZIP code extraction
+        Log::info('ZIP code extraction debug', [
+            'fromZip' => $fromZip,
+            'toZip' => $toZip,
+            'originAddress' => $originAddress,
+            'targetAddress' => $targetAddress,
+            'allZips' => $allZips,
+            'data_keys' => array_keys($data),
+        ]);
 
         $gravityFieldsData = [
             'input_1' => $fullName,

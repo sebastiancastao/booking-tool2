@@ -332,8 +332,16 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
             const details = await fetchPlaceDetails(prediction.place_id);
             formatted = details?.formatted_address || formatted;
             postalCode = details?.postal_code || extractZipFromText(details?.formatted_address) || null;
+            console.log('Address details:', {
+                formatted_address: details?.formatted_address,
+                postal_code: details?.postal_code,
+                extracted_zip: extractZipFromText(details?.formatted_address),
+                final_postal_code: postalCode
+            });
         } catch (err) {
             console.error('Place details lookup failed', err);
+            // Try to extract ZIP from description as last resort
+            postalCode = extractZipFromText(prediction.description) || null;
         }
 
         if (type === 'origin') {
