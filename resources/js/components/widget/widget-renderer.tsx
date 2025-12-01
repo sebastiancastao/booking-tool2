@@ -159,6 +159,34 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
     const [lastDistanceInputs, setLastDistanceInputs] = useState<{ origin: string; destination: string } | null>(null);
     const [phoneError, setPhoneError] = useState<string | null>(null);
 
+    // Steps that should remain optional when enforcing required progression
+    const optionalStepTitles = [
+        'Pickup Location Challenges',
+        'Destination Challenges',
+        'Any additional services?',
+        'Select Moving Supplies',
+    ].map((title) => title.toLowerCase());
+
+    const isStepOptional = (step?: StepData) => {
+        if (!step?.title) return false;
+        return optionalStepTitles.includes(step.title.toLowerCase());
+    };
+
+    const isStepSatisfied = () => {
+        if (!currentStep) return false;
+        if (currentStep.layout?.type === 'route-calculation') {
+            return !!distanceResult;
+        }
+        const selection = selectedOptions[currentStepKey];
+        if (selection === undefined || selection === null) {
+            return false;
+        }
+        if (typeof selection === 'string') {
+            return selection.trim() !== '';
+        }
+        return true;
+    };
+
     const totalSteps = stepOrder.length;
     const currentStepKey = stepOrder[currentStepIndex];
     const currentStep = currentStepKey ? config.steps_data[currentStepKey] : undefined;
@@ -959,12 +987,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                             onClick={handleNext}
                             className="flex items-center gap-2"
                             style={{ backgroundColor: primaryColor }}
-                            disabled={
-                                (currentStep.validation?.required &&
-                                    !selectedOptions[currentStepKey]) ||
-                                (currentStep.layout?.type === 'route-calculation' &&
-                                    !distanceResult)
-                            }
+                            disabled={!isStepOptional(currentStep) && !isStepSatisfied()}
                         >
                             {currentStep.buttons?.primary?.text || 'Continue'}
                             <ArrowRight className="h-4 w-4" />
