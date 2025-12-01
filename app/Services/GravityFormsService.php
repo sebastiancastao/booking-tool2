@@ -177,8 +177,74 @@ class GravityFormsService
             return null;
         };
 
+        $searchZipByKeywords = function (array $keywords) use ($data, $extractZip) {
+            foreach ($data as $key => $value) {
+                if (!is_string($value)) {
+                    continue;
+                }
+                foreach ($keywords as $needle) {
+                    if (stripos((string) $key, $needle) !== false) {
+                        $zip = $extractZip($value);
+                        if ($zip) {
+                            return $zip;
+                        }
+                    }
+                }
+            }
+            return null;
+        };
+
+        $extractZipFromKeys = function (array $keys) use ($data, $getValue, $extractZip) {
+            foreach ($keys as $key) {
+                $value = $getValue([$key]);
+                if (is_string($value)) {
+                    $zip = $extractZip($value);
+                    if ($zip) {
+                        return $zip;
+                    }
+                }
+
+                if (isset($data[$key]) && is_array($data[$key])) {
+                    foreach ($data[$key] as $nestedValue) {
+                        if (!is_string($nestedValue)) {
+                            continue;
+                        }
+                        $zip = $extractZip($nestedValue);
+                        if ($zip) {
+                            return $zip;
+                        }
+                    }
+                }
+            }
+            return null;
+        };
+
+        $collectAllZips = function () use ($data, $extractZip): array {
+            $zips = [];
+            $walker = function ($value) use (&$walker, &$zips, $extractZip) {
+                if (is_array($value)) {
+                    foreach ($value as $item) {
+                        $walker($item);
+                    }
+                    return;
+                }
+                if (!is_string($value)) {
+                    return;
+                }
+                $zip = $extractZip($value);
+                if ($zip) {
+                    $zips[] = $zip;
+                }
+            };
+            $walker($data);
+            return array_values(array_unique($zips));
+        };
+
         $originAddress = $getValue(['fromZip', 'from-zip', 'origin-zip', 'origin-location', 'origin-location-field', 'origin']);
         $targetAddress = $getValue(['toZip', 'to-zip', 'target-zip', 'target-location', 'target-location-field', 'destination']);
+        $distanceCalculation = $data['distance-calculation'] ?? $data['distance_calculation'] ?? null;
+        $distanceOrigin = is_array($distanceCalculation) ? ($distanceCalculation['origin'] ?? $distanceCalculation['from'] ?? null) : null;
+        $distanceDestination = is_array($distanceCalculation) ? ($distanceCalculation['destination'] ?? $distanceCalculation['to'] ?? null) : null;
 
         // Field mapping to actual Gravity Forms IDs for Form 3 (advanced name + email + phone + zips + date + size)
         $fullName = $getValue(['contact-name', 'name', 'full_name', 'fullName']) ?? '';
@@ -193,8 +259,39 @@ class GravityFormsService
         $normalizedPhone = $digitsPhone && strlen($digitsPhone) >= 10
             ? substr($digitsPhone, -10)
             : $rawPhone;
-        $fromZip = $getValue(['fromZip', 'origin-zip', 'zip-from', 'origin-zip-code']) ?? $extractZip($originAddress);
-        $toZip = $getValue(['toZip', 'target-zip', 'zip-to', 'destination-zip']) ?? $extractZip($targetAddress);
+
+        $fromZip = $extractZipFromKeys([
+            'fromZip', 'from-zip', 'from_zip', 'from_zip_code', 'fromZipCode',
+            'origin-zip', 'origin_zip', 'origin_zip_code', 'origin-zip-code', 'originZip',
+            'zip-from', 'origin-zip-code', 'moving-from-zip', 'moving_from_zip', 'moving-from-zip-code',
+            'moving_from_zip_code', 'pickup-zip', 'pickup_zip', 'pickup_zip_code', 'pickup_postal',
+            'postal_from', 'origin-postal', 'origin_postal', 'from-postal', 'fromPostal',
+            'pickupPostalCode',
+        ]) ?? $extractZip($originAddress)
+            ?? $extractZip($distanceOrigin)
+            ?? $searchZipByKeywords(['from', 'origin', 'pickup']);
+
+        $toZip = $extractZipFromKeys([
+            'toZip', 'to-zip', 'to_zip', 'to_zip_code', 'toZipCode',
+            'target-zip', 'target_zip', 'target_zip_code', 'target-zip-code', 'target_postal',
+            'destination-zip', 'destination_zip', 'destination_zip_code', 'destination-zip-code', 'destination_postal',
+            'zip-to', 'moving-to-zip', 'moving_to_zip', 'moving-to-zip-code', 'moving_to_zip_code',
+            'dropoff-zip', 'dropoff_zip', 'dropoff_zip_code', 'delivery-zip', 'delivery_zip', 'delivery_zip_code',
+            'postal_to', 'destination-postal', 'dropoffPostalCode',
+        ]) ?? $extractZip($targetAddress)
+            ?? $extractZip($distanceDestination)
+            ?? $searchZipByKeywords(['to', 'target', 'destination', 'dropoff', 'delivery']);
+
+        // As a final fallback, reuse any zip codes we can find in the payload to avoid Gravity Forms validation errors
+        $allZips = $collectAllZips();
+        if (!$fromZip && !empty($allZips)) {
+            $fromZip = $allZips[0];
+        }
+        if (!$toZip && count($allZips) > 1) {
+            $toZip = $allZips[1];
+        } elseif (!$toZip && $fromZip && !empty($allZips)) {
+            $toZip = $fromZip;
+        }
 
         $rawDate = $getValue([
             'moveDate', 'move-date', 'move_date',
