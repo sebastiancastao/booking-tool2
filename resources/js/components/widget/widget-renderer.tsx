@@ -12,6 +12,25 @@ import {
     Mail,
     Phone,
     User,
+    Briefcase,
+    Heart,
+    Building,
+    Building2,
+    Star,
+    Users,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
+    Navigation,
+    Shield,
+    Wrench,
+    Archive,
+    AlertTriangle,
+    Sunrise,
+    Sun,
+    Sunset,
+    X,
+    MessageCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -88,6 +107,7 @@ interface WidgetRendererProps {
 
 const iconMap: Record<string, any> = {
     Truck,
+    Users,
     Home,
     Package,
     Calendar,
@@ -95,6 +115,24 @@ const iconMap: Record<string, any> = {
     Mail,
     Phone,
     User,
+    Briefcase,
+    Heart,
+    Building,
+    Building2,
+    Star,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
+    Navigation,
+    Shield,
+    Wrench,
+    Archive,
+    AlertTriangle,
+    Sunrise,
+    Sun,
+    Sunset,
+    X,
+    MessageCircle,
 };
 
 export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
@@ -119,12 +157,30 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
     const [distanceStatus, setDistanceStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle');
     const [distanceError, setDistanceError] = useState<string | null>(null);
     const [lastDistanceInputs, setLastDistanceInputs] = useState<{ origin: string; destination: string } | null>(null);
+    const [phoneError, setPhoneError] = useState<string | null>(null);
 
     const totalSteps = stepOrder.length;
     const currentStepKey = stepOrder[currentStepIndex];
     const currentStep = currentStepKey ? config.steps_data[currentStepKey] : undefined;
     const isLastStep = currentStepIndex === totalSteps - 1;
     const primaryColor = config.branding?.primary_color || '#F4C443';
+
+    const extractZipFromText = (text?: string | null) => {
+        if (!text) {
+            return null;
+        }
+
+        const match = text.match(/\b(\d{5})(?:-\d{4})?\b/);
+        return match ? match[1] : null;
+    };
+
+    const isPhoneValueValid = (value?: string | null) => {
+        if (!value) {
+            return false;
+        }
+        const digits = value.replace(/\D/g, '');
+        return digits.length >= 10;
+    };
 
     const getCookieValue = (name: string) => {
         const match = document.cookie
@@ -163,6 +219,42 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
     };
 
     const handleSubmit = async () => {
+        const normalizeToString = (value: any) => {
+            if (value === null || value === undefined) {
+                return '';
+            }
+            if (typeof value === 'string') {
+                return value.trim();
+            }
+            return String(value).trim();
+        };
+
+        const phoneValue = normalizeToString(formData['contact-phone'] ?? formData['phone']);
+        const startAddressValue = normalizeToString(
+            formData['origin-location'] ?? formData['origin'] ?? originAddress
+        );
+        const missingFields: string[] = [];
+
+        const validPhone = isPhoneValueValid(phoneValue);
+        if (!validPhone) {
+            missingFields.push('phone number');
+            setPhoneError('Phone must contain at least 10 digits');
+        } else {
+            setPhoneError(null);
+        }
+        if (!startAddressValue) {
+            missingFields.push('starting address');
+        }
+
+        if (missingFields.length > 0) {
+            setSubmitStatus({
+                state: 'error',
+                message: `Please provide your ${missingFields.join(' and ')} before submitting.`,
+                gravityFormsSubmitted: false,
+            });
+            return;
+        }
+
         if (onSubmit) {
             onSubmit(formData);
         }
@@ -253,6 +345,12 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
 
         setFormData(nextFormData);
         setSelectedOptions({ ...selectedOptions, [stepKey]: value });
+
+        if (/phone/i.test(field)) {
+            setPhoneError(
+                value && !isPhoneValueValid(value) ? 'Phone must contain at least 10 digits' : null
+            );
+        }
     };
 
     const renderIcon = (iconName?: string) => {
@@ -325,11 +423,11 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
         if (options.length === 0) {
             // Provide sensible fallbacks for form-like steps even without options configured
             if (currentStepKey === 'contact-info') {
-                const contactFields = [
-                    { id: 'contact-name', title: 'Full Name', type: 'text', description: 'Enter your full name' },
-                    { id: 'contact-email', title: 'Email', type: 'email', description: 'you@example.com' },
-                    { id: 'contact-phone', title: 'Phone', type: 'text', description: '(555) 123-4567' },
-                ];
+                    const contactFields = [
+                        { id: 'contact-name', title: 'Full Name', type: 'text', description: 'Enter your full name' },
+                        { id: 'contact-email', title: 'Email', type: 'email', description: 'you@example.com' },
+                        { id: 'contact-phone', title: 'Phone', type: 'tel', description: '(555) 123-4567' },
+                    ];
 
                 return (
                     <div className="space-y-4 w-full max-w-md">
@@ -338,12 +436,23 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                                 <Label htmlFor={field.id}>{field.title}</Label>
                                 <Input
                                     id={field.id}
-                                    type={field.type === 'email' ? 'email' : 'text'}
+                                    type={
+                                        field.type === 'email'
+                                            ? 'email'
+                                            : field.type === 'tel'
+                                                ? 'tel'
+                                                : 'text'
+                                    }
                                     placeholder={field.description}
                                     value={formData[field.id] || ''}
                                     onChange={(e) => handleInputChange(field.id, e.target.value, currentStepKey)}
                                     className="w-full"
                                 />
+                                {field.type === 'tel' && phoneError && (
+                                    <p className="text-xs text-red-600">
+                                        {phoneError}
+                                    </p>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -584,17 +693,45 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
 
             setDistanceResult({ miles, estimatedCost });
             const distanceKey = distanceStepKey || 'distance-calculation';
-            setFormData({
-                ...formData,
-                [distanceKey]: {
+            const fromZipCode = extractZipFromText(start);
+            const toZipCode = extractZipFromText(end);
+
+            setFormData((prev) => {
+                const next = {
+                    ...prev,
+                    [distanceKey]: {
+                        origin: start,
+                        destination: end,
+                        miles,
+                        estimated_cost: estimatedCost,
+                        cost_per_mile: costPerMile,
+                    },
+                    'origin-location': start,
+                    'origin-location-field': start,
                     origin: start,
+                    'target-location': end,
+                    'target-location-field': end,
                     destination: end,
-                    miles,
-                    estimated_cost: estimatedCost,
-                    cost_per_mile: costPerMile,
-                },
+                };
+
+                const zipFields: Record<string, string | null> = {
+                    fromZip: fromZipCode,
+                    'from-zip': fromZipCode,
+                    'origin-zip': fromZipCode,
+                    toZip: toZipCode,
+                    'target-zip': toZipCode,
+                    'destination-zip': toZipCode,
+                };
+
+                Object.entries(zipFields).forEach(([key, value]) => {
+                    if (value) {
+                        next[key] = value;
+                    }
+                });
+
+                return next;
             });
-            setSelectedOptions({ ...selectedOptions, [distanceKey]: 'calculated' });
+            setSelectedOptions((prev) => ({ ...prev, [distanceKey]: 'calculated' }));
             setDistanceStatus('success');
             setLastDistanceInputs({ origin: start, destination: end });
         } catch (error: any) {
@@ -801,7 +938,8 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                         variant="outline"
                         onClick={handleBack}
                         disabled={currentStepIndex === 0}
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 text-white"
+                        style={{ color: '#ffffff', borderColor: primaryColor }}
                     >
                         <ArrowLeft className="h-4 w-4" />
                         Back
