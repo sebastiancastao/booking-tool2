@@ -29,5 +29,7 @@ if (typeof window !== 'undefined') {
     window.Ziggy = Ziggy;
 }
 
+
 // This will set light / dark mode on load...
 initializeTheme();
+
