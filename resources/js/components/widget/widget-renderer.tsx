@@ -167,7 +167,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
     const [placesReady, setPlacesReady] = useState(false);
     const [placesLoading, setPlacesLoading] = useState(false);
     const [placesError, setPlacesError] = useState<string | null>(null);
-    const [placesSession, setPlacesSession] = useState<any | null>(null);
+    const [placesSession, setPlacesSession] = useState<string | null>(null);
     const [originPredictions, setOriginPredictions] = useState<Array<{ description: string; place_id: string }>>([]);
     const [destinationPredictions, setDestinationPredictions] = useState<
         Array<{ description: string; place_id: string }>
@@ -249,7 +249,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
 
         setPlacesLoading(true);
         try {
-            await loadGooglePlaces();
+            await loadGooglePlaces().catch(() => {}); // optional load; REST fallback below
             setPlacesReady(true);
             setPlacesError(null);
             setPlacesSession((prev) => prev ?? createSessionToken());
@@ -293,8 +293,9 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
         }
     };
 
-    const handleAddressInputChange = (value: string, type: 'origin' | 'destination') => {
+    const handleAddressInputChange = (value: string, type: 'origin' | 'destination', stepKey?: string) => {
         setPlacesError(null);
+        const targetStepKey = stepKey || currentStepKey;
         if (type === 'origin') {
             setOriginAddress(value);
             setFormData((prev) => ({
@@ -303,6 +304,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                 'origin-location-field': value,
                 origin: value,
             }));
+            setSelectedOptions((prev) => ({ ...prev, [targetStepKey]: value }));
         } else {
             setDestinationAddress(value);
             setFormData((prev) => ({
@@ -311,16 +313,19 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                 'target-location-field': value,
                 destination: value,
             }));
+            setSelectedOptions((prev) => ({ ...prev, [targetStepKey]: value }));
         }
         void updatePredictions(value, type);
     };
 
     const applyPredictionSelection = async (
         prediction: { description: string; place_id: string },
-        type: 'origin' | 'destination'
+        type: 'origin' | 'destination',
+        stepKey?: string
     ) => {
         if (!prediction?.description) return;
 
+        const targetStepKey = stepKey || currentStepKey;
         let formatted = prediction.description;
         let postalCode: string | null = null;
 
@@ -349,6 +354,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                 }
                 return next;
             });
+            setSelectedOptions((prev) => ({ ...prev, [targetStepKey]: formatted }));
         } else {
             setDestinationAddress(formatted);
             setDestinationPredictions([]);
@@ -366,6 +372,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                 }
                 return next;
             });
+            setSelectedOptions((prev) => ({ ...prev, [targetStepKey]: formatted }));
         }
     };
 
@@ -393,7 +400,8 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
     const renderAddressField = (
         type: 'origin' | 'destination',
         label: string,
-        placeholder: string
+        placeholder: string,
+        stepKey?: string
     ) => {
         const value = type === 'origin' ? originAddress : destinationAddress;
         const predictions = type === 'origin' ? originPredictions : destinationPredictions;
@@ -405,7 +413,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                 <Input
                     id={inputId}
                     value={value}
-                    onChange={(e) => handleAddressInputChange(e.target.value, type)}
+                    onChange={(e) => handleAddressInputChange(e.target.value, type, stepKey)}
                     onFocus={() => void ensurePlacesLoaded()}
                     placeholder={placeholder}
                     autoComplete="off"
@@ -674,11 +682,21 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
             }
 
             if (currentStepKey === 'origin-location') {
-                return renderAddressField('origin', currentStep.title || 'Where are you moving from?', 'Street, City');
+                return renderAddressField(
+                    'origin',
+                    currentStep.title || 'Where are you moving from?',
+                    'Street, City',
+                    currentStepKey
+                );
             }
 
             if (currentStepKey === 'target-location') {
-                return renderAddressField('destination', currentStep.title || 'Where are you moving to?', 'Street, City');
+                return renderAddressField(
+                    'destination',
+                    currentStep.title || 'Where are you moving to?',
+                    'Street, City',
+                    currentStepKey
+                );
             }
 
             if (currentStep.layout?.type === 'form') {

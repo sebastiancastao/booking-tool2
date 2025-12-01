@@ -33,6 +33,7 @@ export function loadGooglePlaces(): Promise<any> {
         const script = document.createElement('script');
         script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&language=en`;
         script.async = true;
+        script.defer = true;
         script.onload = () => {
             const google = window.google;
             if (google?.maps?.places) {
@@ -48,81 +49,88 @@ export function loadGooglePlaces(): Promise<any> {
     return loaderPromise;
 }
 
-export function createSessionToken(): any | null {
-    const google = window.google;
-    if (google?.maps?.places) {
-        return new google.maps.places.AutocompleteSessionToken();
+export function createSessionToken(): string {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
     }
-    return null;
+    return Math.random().toString(36).slice(2);
 }
+
+const PLACES_AUTOCOMPLETE_URL = 'https://places.googleapis.com/v1/places:autocomplete';
+const PLACES_DETAILS_URL = 'https://places.googleapis.com/v1/places/';
 
 export async function getAddressPredictions(
     query: string,
-    sessionToken?: any
+    sessionToken?: string
 ): Promise<Array<{ description: string; place_id: string }>> {
-    const google = await loadGooglePlaces();
+    const key = getGoogleKey();
+    if (!key) throw new Error('Missing Google Maps Places API key.');
 
-    return new Promise((resolve, reject) => {
-        const service = new google.maps.places.AutocompleteService();
-        service.getPlacePredictions(
-            {
-                input: query,
-                types: ['address'],
-                sessionToken,
-            },
-            (predictions: any, status: string) => {
-                if (
-                    status !== google.maps.places.PlacesServiceStatus.OK &&
-                    status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS
-                ) {
-                    reject(new Error(`Places autocomplete failed: ${status}`));
-                    return;
-                }
-                resolve(
-                    (predictions || []).map((prediction: any) => ({
-                        description: prediction.description,
-                        place_id: prediction.place_id,
-                    }))
-                );
-            }
-        );
+    const token = sessionToken || createSessionToken();
+    const res = await fetch(PLACES_AUTOCOMPLETE_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': key,
+            'X-Goog-FieldMask': 'place_prediction.place_id,place_prediction.text',
+        },
+        body: JSON.stringify({
+            input: query,
+            sessionToken: token,
+            types: ['address'],
+        }),
     });
+
+    if (!res.ok) {
+        throw new Error('Places autocomplete request failed');
+    }
+    const data = await res.json();
+    const predictions = data.placePredictions || data.place_predictions || [];
+
+    return predictions
+        .map((prediction: any) => ({
+            description:
+                prediction?.text?.text ||
+                prediction?.structured_formatting?.main_text ||
+                prediction?.description ||
+                '',
+            place_id: prediction?.placeId || prediction?.place_id,
+        }))
+        .filter((p: any) => p.place_id && p.description);
 }
 
 export async function fetchPlaceDetails(
     placeId: string,
-    sessionToken?: any
+    sessionToken?: string
 ): Promise<{ formatted_address?: string; postal_code?: string }> {
-    const google = await loadGooglePlaces();
+    const key = getGoogleKey();
+    if (!key) throw new Error('Missing Google Maps Places API key.');
+    const token = sessionToken || createSessionToken();
 
-    return new Promise((resolve, reject) => {
-        const service = new google.maps.places.PlacesService(document.createElement('div'));
-        service.getDetails(
-            {
-                placeId,
-                fields: ['formatted_address', 'address_components'],
-                sessionToken,
-            },
-            (result: any, status: string) => {
-                if (status !== google.maps.places.PlacesServiceStatus.OK) {
-                    reject(new Error(`Places details failed: ${status}`));
-                    return;
-                }
-
-                let postalCode: string | undefined;
-                const components = result?.address_components || [];
-                for (const component of components) {
-                    if (component.types && component.types.includes('postal_code')) {
-                        postalCode = component.long_name;
-                        break;
-                    }
-                }
-
-                resolve({
-                    formatted_address: result?.formatted_address,
-                    postal_code: postalCode,
-                });
-            }
-        );
+    const res = await fetch(`${PLACES_DETAILS_URL}${encodeURIComponent(placeId)}?sessionToken=${token}`, {
+        method: 'GET',
+        headers: {
+            'X-Goog-Api-Key': key,
+            'X-Goog-FieldMask': 'formattedAddress,addressComponents',
+        },
     });
+
+    if (!res.ok) {
+        throw new Error('Places details request failed');
+    }
+    const data = await res.json();
+
+    let postalCode: string | undefined;
+    const components = data.addressComponents || data.address_components || [];
+    for (const component of components) {
+        if (component.types && component.types.includes('postal_code')) {
+            postalCode = component.long_name || component.longName || component.shortName || component.short_name;
+            break;
+        }
+    }
+
+    return {
+        formatted_address: data.formattedAddress || data.formatted_address,
+        postal_code: postalCode,
+    };
 }
