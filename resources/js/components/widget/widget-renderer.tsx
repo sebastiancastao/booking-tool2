@@ -36,11 +36,12 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { geocodeDistance } from '@/lib/mapbox';
 import {
     getAddressPredictions,
     fetchPlaceDetails,
     createSessionToken,
+    geocodeDistance,
+    loadGooglePlaces,
 } from '@/lib/googlePlaces';
 
 interface WidgetConfig {
@@ -944,28 +945,32 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
             const miles = result.miles;
             const billableMiles = Math.max(miles, minimumDistance);
             const estimatedCost = Number((billableMiles * costPerMile).toFixed(2));
+            const resolvedOrigin = result.origin?.formatted_address || start;
+            const resolvedDestination = result.destination?.formatted_address || end;
+            const fromZipCode =
+                result.origin?.postal_code || extractZipFromText(resolvedOrigin) || extractZipFromText(start);
+            const toZipCode =
+                result.destination?.postal_code || extractZipFromText(resolvedDestination) || extractZipFromText(end);
 
             setDistanceResult({ miles, estimatedCost });
             const distanceKey = distanceStepKey || 'distance-calculation';
-            const fromZipCode = extractZipFromText(start);
-            const toZipCode = extractZipFromText(end);
 
             setFormData((prev) => {
                 const next = {
                     ...prev,
                     [distanceKey]: {
-                        origin: start,
-                        destination: end,
+                        origin: resolvedOrigin,
+                        destination: resolvedDestination,
                         miles,
                         estimated_cost: estimatedCost,
                         cost_per_mile: costPerMile,
                     },
-                    'origin-location': start,
-                    'origin-location-field': start,
-                    origin: start,
-                    'target-location': end,
-                    'target-location-field': end,
-                    destination: end,
+                    'origin-location': resolvedOrigin,
+                    'origin-location-field': resolvedOrigin,
+                    origin: resolvedOrigin,
+                    'target-location': resolvedDestination,
+                    'target-location-field': resolvedDestination,
+                    destination: resolvedDestination,
                 };
 
                 const zipFields: Record<string, string | null> = {
@@ -1009,18 +1014,6 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
             setDestinationAddress(formData['target-location']);
         }
     }, [formData, originAddress, destinationAddress]);
-
-    useEffect(() => {
-        // auto-calculate distance when both addresses are present and the distance module exists
-        if (!distanceStepKey) return;
-        const start = originAddress.trim();
-        const end = destinationAddress.trim();
-        if (!start || !end) return;
-        const last = lastDistanceInputs;
-        if (last && last.origin === start && last.destination === end) return;
-
-        handleDistanceCalculate(start, end);
-    }, [originAddress, destinationAddress, distanceStepKey, lastDistanceInputs]);
 
     if (!currentStep) {
         return (

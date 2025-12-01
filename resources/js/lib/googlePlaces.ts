@@ -1,140 +1,193 @@
-function getApiBaseUrl(): string {
-    // Use window.location.origin when embedded in iframe to call the Laravel backend
-    if (typeof window !== 'undefined' && window.location) {
-        // Check if we're in an iframe
-        if (window.self !== window.top) {
-            // Extract base URL from the current iframe src
-            const currentUrl = window.location.href;
-            const match = currentUrl.match(/^(https?:\/\/[^/]+)/);
-            return match ? match[1] : '';
-        }
-        return window.location.origin;
-    }
-    return '';
+// Mapbox-based geocoding helpers for autocomplete, place details, and distance
+// NOTE: Requires VITE_MAPBOX_TOKEN to be set.
+
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+
+if (!MAPBOX_TOKEN) {
+    console.warn('Missing VITE_MAPBOX_TOKEN. Mapbox geocoding will fail.');
 }
 
-export function createSessionToken(): string {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
+// Bias to Georgia, USA (when users omit ZIP codes)
+const GEORGIA_CENTER = { latitude: 32.1656, longitude: -82.9001 };
+const GEORGIA_PROXIMITY = `${GEORGIA_CENTER.longitude},${GEORGIA_CENTER.latitude}`;
+const GEORGIA_COUNTRY = 'US';
+
+type MapboxFeature = {
+    id: string;
+    place_name: string;
+    center: [number, number]; // [lng, lat]
+    context?: Array<{ id?: string; text?: string }>;
+    properties?: Record<string, any>;
+};
+
+const toRadians = (deg: number) => (deg * Math.PI) / 180;
+const haversineMiles = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+    const R = 3958.8;
+    const dLat = toRadians(b.lat - a.lat);
+    const dLon = toRadians(b.lng - a.lng);
+    const lat1 = toRadians(a.lat);
+    const lat2 = toRadians(b.lat);
+    const h =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+    return 2 * R * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+};
+
+const safeEncode = (value: any): string => {
+    try {
+        return btoa(unescape(encodeURIComponent(JSON.stringify(value))));
+    } catch {
+        return '';
     }
+};
+
+const safeDecode = (value: string): any | null => {
+    try {
+        return JSON.parse(decodeURIComponent(escape(atob(value))));
+    } catch {
+        return null;
+    }
+};
+
+const findPostcode = (feature?: MapboxFeature): string | undefined => {
+    if (!feature) return undefined;
+    if (feature.properties?.postcode) return feature.properties.postcode;
+    const ctx = feature.context || [];
+    for (const c of ctx) {
+        if (c.id && c.id.startsWith('postcode') && c.text) {
+            return c.text;
+        }
+    }
+    return undefined;
+};
+
+const forwardGeocode = async (query: string, limit = 5): Promise<MapboxFeature[]> => {
+    if (!MAPBOX_TOKEN) throw new Error('Missing Mapbox token');
+    const url = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`);
+    url.searchParams.set('access_token', MAPBOX_TOKEN);
+    url.searchParams.set('autocomplete', 'true');
+    url.searchParams.set('limit', String(limit));
+    url.searchParams.set('country', GEORGIA_COUNTRY);
+    url.searchParams.set('proximity', GEORGIA_PROXIMITY);
+    url.searchParams.set('types', 'address,place,postcode');
+
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`Mapbox forward geocode failed: ${res.status}`);
+    const data = await res.json();
+    return data.features || [];
+};
+
+const reversePostal = async (lat: number, lng: number): Promise<string | undefined> => {
+    if (!MAPBOX_TOKEN) return undefined;
+    const url = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json`);
+    url.searchParams.set('access_token', MAPBOX_TOKEN);
+    url.searchParams.set('types', 'postcode,address');
+    url.searchParams.set('limit', '1');
+
+    const res = await fetch(url.toString());
+    if (!res.ok) return undefined;
+    const data = await res.json();
+    const feat = data.features?.[0];
+    return findPostcode(feat) || feat?.place_name?.match(/\b(\d{5})(?:-\d{4})?\b/)?.[1];
+};
+
+export function createSessionToken(): string {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
     return Math.random().toString(36).slice(2);
+}
+
+export function loadGooglePlaces(): Promise<null> {
+    // No-op shim to keep existing widget flow working without Google JS.
+    return Promise.resolve(null);
 }
 
 export async function getAddressPredictions(
     query: string,
-    sessionToken?: string
+    _sessionToken?: string
 ): Promise<Array<{ description: string; place_id: string }>> {
-    console.log('Getting address predictions for:', query);
-    const token = sessionToken || createSessionToken();
-
-    try {
-        const params = new URLSearchParams({
-            input: query,
-            sessiontoken: token,
-            components: 'country:us', // Restrict to USA
-            location: '33.7490,-84.3880', // Atlanta, GA coordinates for bias
-            radius: '100000', // 100km radius to prioritize Georgia
-        });
-
-        const baseUrl = getApiBaseUrl();
-        const url = `${baseUrl}/api/places/autocomplete?${params.toString()}`;
-        console.log('Fetching from:', url);
-
-        const res = await fetch(url, {
-            method: 'GET',
-            credentials: 'include',
-        });
-
-        if (!res.ok) {
-            const errorText = await res.text();
-            console.error('Places autocomplete failed:', res.status, errorText);
-            throw new Error(`Places autocomplete request failed: ${res.status} ${errorText}`);
-        }
-
-        const data = await res.json();
-        console.log('Places API response:', data);
-
-        if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-            console.error('Places API error:', data.status, data.error_message);
-            throw new Error(`Places API error: ${data.status} ${data.error_message || ''}`);
-        }
-
-        const predictions = (data.predictions || [])
-            .map((prediction: { place_id?: string; description?: string }) => ({
-                description: prediction.description || '',
-                place_id: prediction.place_id || '',
-            }))
-            .filter((p: { place_id: string; description: string }) => p && p.place_id && p.description);
-
-        console.log('Parsed predictions:', predictions);
-        return predictions;
-    } catch (error) {
-        console.error('Error in getAddressPredictions:', error);
-        throw error;
-    }
+    const features = await forwardGeocode(query, 5);
+    return features
+        .map((feature) => ({
+            description: feature.place_name,
+            place_id: safeEncode({
+                id: feature.id,
+                place_name: feature.place_name,
+                center: feature.center,
+                postcode: findPostcode(feature),
+            }),
+        }))
+        .filter((p) => p.description && p.place_id);
 }
 
 export async function fetchPlaceDetails(
     placeId: string
-): Promise<{ formatted_address?: string; postal_code?: string }> {
-    console.log('Fetching place details for:', placeId);
-
-    try {
-        const params = new URLSearchParams({
-            place_id: placeId,
-        });
-
-        const baseUrl = getApiBaseUrl();
-        const url = `${baseUrl}/api/places/details?${params.toString()}`;
-        console.log('Fetching from:', url);
-
-        const res = await fetch(url, {
-            method: 'GET',
-            credentials: 'include',
-        });
-
-        if (!res.ok) {
-            const errorText = await res.text();
-            console.error('Places details failed:', res.status, errorText);
-            throw new Error(`Places details request failed: ${res.status}`);
-        }
-
-        const data = await res.json();
-        console.log('Place details response:', data);
-
-        if (data.status !== 'OK') {
-            console.error('Places API error:', data.status, data.error_message);
-            throw new Error(`Places API error: ${data.status} ${data.error_message || ''}`);
-        }
-
-        const result = data.result || {};
-        let postalCode: string | undefined;
-        const components = result.address_components || [];
-
-        // Extract postal code from address components
-        for (const component of components) {
-            if (component.types && component.types.includes('postal_code')) {
-                postalCode = component.long_name || component.short_name;
-                break;
-            }
-        }
-
-        // If no postal code found, try to extract from formatted address
-        if (!postalCode && result.formatted_address) {
-            const match = result.formatted_address.match(/\b(\d{5})(?:-\d{4})?\b/);
-            if (match) {
-                postalCode = match[1];
-            }
-        }
-
-        console.log('Extracted postal code:', postalCode);
-
+): Promise<{ formatted_address?: string; postal_code?: string; location?: { lat: number; lng: number } }> {
+    const decoded = safeDecode(placeId);
+    if (decoded?.place_name && decoded?.center) {
+        const [lng, lat] = decoded.center as [number, number];
+        const postal =
+            decoded.postcode ||
+            (await reversePostal(lat, lng)) ||
+            decoded.place_name.match(/\b(\d{5})(?:-\d{4})?\b/)?.[1];
         return {
-            formatted_address: result.formatted_address,
-            postal_code: postalCode,
+            formatted_address: decoded.place_name,
+            postal_code: postal,
+            location: { lat, lng },
         };
-    } catch (error) {
-        console.error('Error in fetchPlaceDetails:', error);
-        throw error;
     }
+
+    // Fallback: try a small forward geocode
+    const feats = await forwardGeocode(placeId, 1);
+    const feat = feats[0];
+    if (!feat) return {};
+    const [lng, lat] = feat.center;
+    const postal =
+        findPostcode(feat) || feat.place_name.match(/\b(\d{5})(?:-\d{4})?\b/)?.[1] || (await reversePostal(lat, lng));
+    return {
+        formatted_address: feat.place_name,
+        postal_code: postal,
+        location: { lat, lng },
+    };
+}
+
+export async function geocodeDistance(origin: string, destination: string): Promise<{
+    origin: { lat: number; lng: number; formatted_address?: string; place_id?: string; postal_code?: string };
+    destination: { lat: number; lng: number; formatted_address?: string; place_id?: string; postal_code?: string };
+    miles: number;
+}> {
+    const [originFeat, destFeat] = await Promise.all([forwardGeocode(origin, 1), forwardGeocode(destination, 1)]);
+    const o = originFeat[0];
+    const d = destFeat[0];
+    if (!o || !d) {
+        throw new Error('Unable to geocode origin or destination');
+    }
+
+    const [oLng, oLat] = o.center;
+    const [dLng, dLat] = d.center;
+
+    const originPostal = findPostcode(o) || (await reversePostal(oLat, oLng));
+    const destPostal = findPostcode(d) || (await reversePostal(dLat, dLng));
+
+    const originData = {
+        lat: oLat,
+        lng: oLng,
+        formatted_address: o.place_name,
+        place_id: safeEncode({ id: o.id, place_name: o.place_name, center: o.center, postcode: originPostal }),
+        postal_code: originPostal,
+    };
+    const destData = {
+        lat: dLat,
+        lng: dLng,
+        formatted_address: d.place_name,
+        place_id: safeEncode({ id: d.id, place_name: d.place_name, center: d.center, postcode: destPostal }),
+        postal_code: destPostal,
+    };
+
+    const miles = haversineMiles({ lat: oLat, lng: oLng }, { lat: dLat, lng: dLng });
+
+    return {
+        origin: originData,
+        destination: destData,
+        miles,
+    };
 }
