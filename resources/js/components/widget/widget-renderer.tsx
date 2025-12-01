@@ -165,6 +165,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
     const [lastDistanceInputs, setLastDistanceInputs] = useState<{ origin: string; destination: string } | null>(null);
     const [phoneError, setPhoneError] = useState<string | null>(null);
     const [placesReady, setPlacesReady] = useState(false);
+    const [placesLoading, setPlacesLoading] = useState(false);
     const [placesError, setPlacesError] = useState<string | null>(null);
     const [placesSession, setPlacesSession] = useState<any | null>(null);
     const [originPredictions, setOriginPredictions] = useState<Array<{ description: string; place_id: string }>>([]);
@@ -242,22 +243,37 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
         }
     };
 
-    const ensurePlacesLoaded = async () => {
+    const ensurePlacesLoaded = async (): Promise<boolean> => {
+        if (placesReady) return true;
+        if (placesLoading) return false;
+
+        setPlacesLoading(true);
         try {
             await loadGooglePlaces();
             setPlacesReady(true);
             setPlacesError(null);
             setPlacesSession((prev) => prev ?? createSessionToken());
+            return true;
         } catch (err: any) {
             console.error('Google Places failed to load', err);
             setPlacesReady(false);
             setPlacesError(err?.message || 'Google address autocomplete unavailable.');
+            return false;
+        } finally {
+            setPlacesLoading(false);
         }
     };
 
     const updatePredictions = async (value: string, type: 'origin' | 'destination') => {
         const trimmed = value.trim();
-        if (!placesReady || trimmed.length < 3) {
+        if (trimmed.length < 3) {
+            if (type === 'origin') setOriginPredictions([]);
+            else setDestinationPredictions([]);
+            return;
+        }
+
+        const canUsePlaces = placesReady || (await ensurePlacesLoaded());
+        if (!canUsePlaces) {
             if (type === 'origin') setOriginPredictions([]);
             else setDestinationPredictions([]);
             return;
@@ -370,6 +386,31 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                         {prediction.description}
                     </button>
                 ))}
+            </div>
+        );
+    };
+
+    const renderAddressField = (
+        type: 'origin' | 'destination',
+        label: string,
+        placeholder: string
+    ) => {
+        const value = type === 'origin' ? originAddress : destinationAddress;
+        const predictions = type === 'origin' ? originPredictions : destinationPredictions;
+        const inputId = `${type}-address`;
+
+        return (
+            <div className="space-y-2 relative w-full max-w-xl">
+                <Label htmlFor={inputId}>{label}</Label>
+                <Input
+                    id={inputId}
+                    value={value}
+                    onChange={(e) => handleAddressInputChange(e.target.value, type)}
+                    onFocus={() => void ensurePlacesLoaded()}
+                    placeholder={placeholder}
+                    autoComplete="off"
+                />
+                {renderPredictionList(predictions, type)}
             </div>
         );
     };
@@ -630,6 +671,14 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                         ))}
                     </div>
                 );
+            }
+
+            if (currentStepKey === 'origin-location') {
+                return renderAddressField('origin', currentStep.title || 'Where are you moving from?', 'Street, City');
+            }
+
+            if (currentStepKey === 'target-location') {
+                return renderAddressField('destination', currentStep.title || 'Where are you moving to?', 'Street, City');
             }
 
             if (currentStep.layout?.type === 'form') {
