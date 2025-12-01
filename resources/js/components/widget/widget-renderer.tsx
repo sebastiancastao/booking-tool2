@@ -37,6 +37,12 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { geocodeDistance } from '@/lib/mapbox';
+import {
+    loadGooglePlaces,
+    getAddressPredictions,
+    fetchPlaceDetails,
+    createSessionToken,
+} from '@/lib/googlePlaces';
 
 interface WidgetConfig {
     widget_id: string;
@@ -158,6 +164,13 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
     const [distanceError, setDistanceError] = useState<string | null>(null);
     const [lastDistanceInputs, setLastDistanceInputs] = useState<{ origin: string; destination: string } | null>(null);
     const [phoneError, setPhoneError] = useState<string | null>(null);
+    const [placesReady, setPlacesReady] = useState(false);
+    const [placesError, setPlacesError] = useState<string | null>(null);
+    const [placesSession, setPlacesSession] = useState<any | null>(null);
+    const [originPredictions, setOriginPredictions] = useState<Array<{ description: string; place_id: string }>>([]);
+    const [destinationPredictions, setDestinationPredictions] = useState<
+        Array<{ description: string; place_id: string }>
+    >([]);
 
     // Steps that should remain optional when enforcing required progression
     const optionalStepTitles = [
@@ -227,6 +240,138 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                 console.error('Unable to fetch CSRF cookie', err);
             }
         }
+    };
+
+    const ensurePlacesLoaded = async () => {
+        try {
+            await loadGooglePlaces();
+            setPlacesReady(true);
+            setPlacesError(null);
+            setPlacesSession((prev) => prev ?? createSessionToken());
+        } catch (err: any) {
+            console.error('Google Places failed to load', err);
+            setPlacesReady(false);
+            setPlacesError(err?.message || 'Google address autocomplete unavailable.');
+        }
+    };
+
+    const updatePredictions = async (value: string, type: 'origin' | 'destination') => {
+        const trimmed = value.trim();
+        if (!placesReady || trimmed.length < 3) {
+            if (type === 'origin') setOriginPredictions([]);
+            else setDestinationPredictions([]);
+            return;
+        }
+
+        try {
+            const token = placesSession || createSessionToken();
+            if (!placesSession && token) {
+                setPlacesSession(token);
+            }
+            const predictions = await getAddressPredictions(trimmed, token || undefined);
+            if (type === 'origin') setOriginPredictions(predictions);
+            else setDestinationPredictions(predictions);
+        } catch (err: any) {
+            console.error('Places predictions failed', err);
+            setPlacesError(err?.message || 'Unable to fetch address suggestions.');
+        }
+    };
+
+    const handleAddressInputChange = (value: string, type: 'origin' | 'destination') => {
+        setPlacesError(null);
+        if (type === 'origin') {
+            setOriginAddress(value);
+            setFormData((prev) => ({
+                ...prev,
+                'origin-location': value,
+                'origin-location-field': value,
+                origin: value,
+            }));
+        } else {
+            setDestinationAddress(value);
+            setFormData((prev) => ({
+                ...prev,
+                'target-location': value,
+                'target-location-field': value,
+                destination: value,
+            }));
+        }
+        void updatePredictions(value, type);
+    };
+
+    const applyPredictionSelection = async (
+        prediction: { description: string; place_id: string },
+        type: 'origin' | 'destination'
+    ) => {
+        if (!prediction?.description) return;
+
+        let formatted = prediction.description;
+        let postalCode: string | null = null;
+
+        try {
+            const details = await fetchPlaceDetails(prediction.place_id, placesSession || undefined);
+            formatted = details?.formatted_address || formatted;
+            postalCode = details?.postal_code || extractZipFromText(details?.formatted_address) || null;
+        } catch (err) {
+            console.error('Place details lookup failed', err);
+        }
+
+        if (type === 'origin') {
+            setOriginAddress(formatted);
+            setOriginPredictions([]);
+            setFormData((prev) => {
+                const next = {
+                    ...prev,
+                    'origin-location': formatted,
+                    'origin-location-field': formatted,
+                    origin: formatted,
+                };
+                if (postalCode) {
+                    next['fromZip'] = postalCode;
+                    next['from-zip'] = postalCode;
+                    next['origin-zip'] = postalCode;
+                }
+                return next;
+            });
+        } else {
+            setDestinationAddress(formatted);
+            setDestinationPredictions([]);
+            setFormData((prev) => {
+                const next = {
+                    ...prev,
+                    'target-location': formatted,
+                    'target-location-field': formatted,
+                    destination: formatted,
+                };
+                if (postalCode) {
+                    next['toZip'] = postalCode;
+                    next['target-zip'] = postalCode;
+                    next['destination-zip'] = postalCode;
+                }
+                return next;
+            });
+        }
+    };
+
+    const renderPredictionList = (
+        predictions: Array<{ description: string; place_id: string }>,
+        type: 'origin' | 'destination'
+    ) => {
+        if (!predictions.length) return null;
+        return (
+            <div className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow">
+                {predictions.map((prediction) => (
+                    <button
+                        key={prediction.place_id}
+                        type="button"
+                        onClick={() => applyPredictionSelection(prediction, type)}
+                        className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                    >
+                        {prediction.description}
+                    </button>
+                ))}
+            </div>
+        );
     };
 
     const handleOptionSelect = (optionValue: string) => {
@@ -527,24 +672,28 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
 
             return (
                 <div className="w-full max-w-xl space-y-4">
-                    <div className="space-y-2">
+                    <div className="space-y-2 relative">
                         <Label htmlFor="origin-address">Starting address</Label>
                         <Input
                             id="origin-address"
                             value={originAddress}
-                            onChange={(e) => setOriginAddress(e.target.value)}
+                            onChange={(e) => handleAddressInputChange(e.target.value, 'origin')}
                             placeholder="123 Main St, City, State"
+                            autoComplete="off"
                         />
+                        {renderPredictionList(originPredictions, 'origin')}
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-2 relative">
                         <Label htmlFor="destination-address">Destination address</Label>
                         <Input
                             id="destination-address"
                             value={destinationAddress}
-                            onChange={(e) => setDestinationAddress(e.target.value)}
+                            onChange={(e) => handleAddressInputChange(e.target.value, 'destination')}
                             placeholder="456 Oak Ave, City, State"
+                            autoComplete="off"
                         />
+                        {renderPredictionList(destinationPredictions, 'destination')}
                     </div>
 
                     <Button
@@ -561,6 +710,9 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                         <MapPin className="h-4 w-4" />
                     </Button>
 
+                    {placesError && (
+                        <div className="text-sm text-red-600">{placesError}</div>
+                    )}
                     {distanceError && (
                         <div className="text-sm text-red-600">{distanceError}</div>
                     )}
@@ -767,6 +919,12 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
             setDistanceError(error?.message || 'Unable to calculate distance right now.');
         }
     };
+
+    useEffect(() => {
+        if (currentStep?.layout?.type === 'route-calculation') {
+            void ensurePlacesLoaded();
+        }
+    }, [currentStep?.layout?.type, currentStepKey]);
 
     useEffect(() => {
         // keep local address state in sync with form data if it already exists
