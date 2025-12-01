@@ -1,3 +1,18 @@
+function getApiBaseUrl(): string {
+    // Use window.location.origin when embedded in iframe to call the Laravel backend
+    if (typeof window !== 'undefined' && window.location) {
+        // Check if we're in an iframe
+        if (window.self !== window.top) {
+            // Extract base URL from the current iframe src
+            const currentUrl = window.location.href;
+            const match = currentUrl.match(/^(https?:\/\/[^/]+)/);
+            return match ? match[1] : '';
+        }
+        return window.location.origin;
+    }
+    return '';
+}
+
 export function createSessionToken(): string {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
         return crypto.randomUUID();
@@ -18,9 +33,13 @@ export async function getAddressPredictions(
             sessiontoken: token,
         });
 
-        const res = await fetch(`/api/places/autocomplete?${params.toString()}`, {
+        const baseUrl = getApiBaseUrl();
+        const url = `${baseUrl}/api/places/autocomplete?${params.toString()}`;
+        console.log('Fetching from:', url);
+
+        const res = await fetch(url, {
             method: 'GET',
-            credentials: 'same-origin',
+            credentials: 'include',
         });
 
         if (!res.ok) {
@@ -62,9 +81,13 @@ export async function fetchPlaceDetails(
             place_id: placeId,
         });
 
-        const res = await fetch(`/api/places/details?${params.toString()}`, {
+        const baseUrl = getApiBaseUrl();
+        const url = `${baseUrl}/api/places/details?${params.toString()}`;
+        console.log('Fetching from:', url);
+
+        const res = await fetch(url, {
             method: 'GET',
-            credentials: 'same-origin',
+            credentials: 'include',
         });
 
         if (!res.ok) {

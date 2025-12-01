@@ -7,6 +7,15 @@ use Illuminate\Support\Facades\Http;
 
 class PlacesController extends Controller
 {
+    public function __construct()
+    {
+        // Add CORS headers for cross-origin requests from embedded widgets
+        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type, Accept, X-Requested-With');
+        header('Access-Control-Allow-Credentials: true');
+    }
+
     public function autocomplete(Request $request)
     {
         $request->validate([

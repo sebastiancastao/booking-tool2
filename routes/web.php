@@ -24,11 +24,13 @@ Route::post('quotes/send', [QuoteController::class, 'send'])
     ->name('quotes.send')
     ->withoutMiddleware([VerifyCsrfToken::class]); // Public endpoint for widget submissions; CSRF exempt for cross-origin embeds
 
-// Places API proxy routes
+// Places API proxy routes - allow cross-origin for embedded widgets
 Route::get('api/places/autocomplete', [\App\Http\Controllers\PlacesController::class, 'autocomplete'])
-    ->name('places.autocomplete');
+    ->name('places.autocomplete')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 Route::get('api/places/details', [\App\Http\Controllers\PlacesController::class, 'details'])
-    ->name('places.details');
+    ->name('places.details')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
