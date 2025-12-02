@@ -1,7 +1,16 @@
-// Mapbox-based geocoding helpers for autocomplete, place details, and distance
-// NOTE: Requires VITE_MAPBOX_TOKEN to be set.
+// Mapbox-based geocoding helpers for autocomplete, place details, and distance.
+// Requires a public Mapbox token (pk...) provided via VITE_MAPBOX_TOKEN at build time
+// or injected at runtime on window.__MAPBOX_TOKEN__.
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+declare global {
+    interface Window {
+        __MAPBOX_TOKEN__?: string;
+    }
+}
+
+const MAPBOX_TOKEN =
+    import.meta.env.VITE_MAPBOX_TOKEN ||
+    (typeof window !== 'undefined' ? window.__MAPBOX_TOKEN__ : undefined);
 
 if (!MAPBOX_TOKEN) {
     console.warn('Missing VITE_MAPBOX_TOKEN. Mapbox geocoding will fail.');
@@ -96,8 +105,8 @@ export function createSessionToken(): string {
     return Math.random().toString(36).slice(2);
 }
 
+// No-op shim to keep widget code paths intact (replaces Google loader)
 export function loadGooglePlaces(): Promise<null> {
-    // No-op shim to keep existing widget flow working without Google JS.
     return Promise.resolve(null);
 }
 
@@ -136,7 +145,6 @@ export async function fetchPlaceDetails(
         };
     }
 
-    // Fallback: try a small forward geocode
     const feats = await forwardGeocode(placeId, 1);
     const feat = feats[0];
     if (!feat) return {};
