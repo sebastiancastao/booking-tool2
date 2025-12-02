@@ -900,17 +900,27 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
         // Regular option buttons - auto-adjust columns based on number of options
         let gridCols = currentStep.layout?.columns || 1;
 
-        // Smart auto-adjust for steps with many options
-        // Override configured columns if there are many options
-        if (options.length >= 10) {
-            gridCols = Math.max(gridCols, 3); // At least 3 columns for 10+ options
-        } else if (options.length >= 6) {
-            gridCols = Math.max(gridCols, 2); // At least 2 columns for 6-9 options
-        } else if (options.length >= 4 && !currentStep.layout?.columns) {
-            gridCols = 2; // 2 columns for 4-5 options (only if not explicitly set)
+        // Force specific layouts for certain steps
+        if (currentStepKey === 'project-scope') {
+            // "What size is your move?" - always 3 columns
+            gridCols = 3;
+        } else if (currentStepKey === 'supply-selection') {
+            // "Select Moving Supplies" - 5 columns for maximum horizontal layout
+            gridCols = 5;
+        } else {
+            // Smart auto-adjust for other steps with many options
+            if (options.length >= 10) {
+                gridCols = Math.max(gridCols, 3); // At least 3 columns for 10+ options
+            } else if (options.length >= 6) {
+                gridCols = Math.max(gridCols, 2); // At least 2 columns for 6-9 options
+            } else if (options.length >= 4 && !currentStep.layout?.columns) {
+                gridCols = 2; // 2 columns for 4-5 options (only if not explicitly set)
+            }
         }
 
         const gridClass =
+            gridCols === 5 ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5' :
+            gridCols === 4 ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' :
             gridCols === 3 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' :
             gridCols === 2 ? 'grid-cols-1 md:grid-cols-2' :
             'grid-cols-1';
