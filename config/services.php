@@ -46,4 +46,8 @@ return [
         'maps_api_key' => env('VITE_GOOGLE_MAPS_API_KEY'),
     ],
 
+    'mapbox' => [
+        'public_token' => env('MAPBOX_PUBLIC_TOKEN'),
+    ],
+
 ];

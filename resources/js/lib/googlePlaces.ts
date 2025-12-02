@@ -8,12 +8,25 @@ declare global {
     }
 }
 
-const MAPBOX_TOKEN =
-    import.meta.env.VITE_MAPBOX_TOKEN ||
-    (typeof window !== 'undefined' ? window.__MAPBOX_TOKEN__ : undefined);
+// Helper to get token (supports both build-time and runtime injection)
+const getMapboxToken = (): string | undefined => {
+    return (
+        import.meta.env.VITE_MAPBOX_TOKEN ||
+        (typeof window !== 'undefined' ? window.__MAPBOX_TOKEN__ : undefined)
+    );
+};
 
-if (!MAPBOX_TOKEN) {
-    console.warn('Missing VITE_MAPBOX_TOKEN. Mapbox geocoding will fail.');
+let MAPBOX_TOKEN = getMapboxToken();
+
+// Only warn if token is missing after checking both sources
+if (!MAPBOX_TOKEN && typeof window !== 'undefined') {
+    // Wait a tick for window.__MAPBOX_TOKEN__ to be injected
+    setTimeout(() => {
+        MAPBOX_TOKEN = getMapboxToken();
+        if (!MAPBOX_TOKEN) {
+            console.warn('Missing Mapbox token. Set VITE_MAPBOX_TOKEN or window.__MAPBOX_TOKEN__. Geocoding will fail.');
+        }
+    }, 0);
 }
 
 // Bias to Georgia, USA (when users omit ZIP codes)
@@ -71,9 +84,10 @@ const findPostcode = (feature?: MapboxFeature): string | undefined => {
 };
 
 const forwardGeocode = async (query: string, limit = 5): Promise<MapboxFeature[]> => {
-    if (!MAPBOX_TOKEN) throw new Error('Missing Mapbox token');
+    const token = getMapboxToken();
+    if (!token) throw new Error('Missing Mapbox token');
     const url = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`);
-    url.searchParams.set('access_token', MAPBOX_TOKEN);
+    url.searchParams.set('access_token', token);
     url.searchParams.set('autocomplete', 'true');
     url.searchParams.set('limit', String(limit));
     url.searchParams.set('country', GEORGIA_COUNTRY);
@@ -87,9 +101,10 @@ const forwardGeocode = async (query: string, limit = 5): Promise<MapboxFeature[]
 };
 
 const reversePostal = async (lat: number, lng: number): Promise<string | undefined> => {
-    if (!MAPBOX_TOKEN) return undefined;
+    const token = getMapboxToken();
+    if (!token) return undefined;
     const url = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json`);
-    url.searchParams.set('access_token', MAPBOX_TOKEN);
+    url.searchParams.set('access_token', token);
     url.searchParams.set('types', 'postcode,address');
     url.searchParams.set('limit', '1');
 

@@ -41,6 +41,11 @@
 
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
+        {{-- Inject Mapbox token for client-side geocoding --}}
+        <script>
+            window.__MAPBOX_TOKEN__ = '{{ config('services.mapbox.public_token') }}';
+        </script>
+
         @routes
         @viteReactRefresh
         @vite(['resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
