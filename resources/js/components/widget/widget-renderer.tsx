@@ -455,8 +455,8 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
         const detectedZip = extractZipFromText(value);
 
         return (
-            <div className="space-y-2 relative w-full max-w-xl">
-                <Label htmlFor={inputId}>{label}</Label>
+            <div className="space-y-1 relative w-full max-w-xl">
+                <Label htmlFor={inputId} className="text-sm">{label}</Label>
                 <Input
                     id={inputId}
                     value={value}
@@ -464,11 +464,12 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                     onFocus={() => void ensurePlacesLoaded()}
                     placeholder={placeholder}
                     autoComplete="off"
+                    className="h-8 text-sm"
                 />
                 {renderPredictionList(predictions, type)}
                 {detectedZip && (
-                    <div className="text-sm text-green-600 flex items-center gap-1">
-                        <Check className="h-4 w-4" />
+                    <div className="text-xs text-green-600 flex items-center gap-1">
+                        <Check className="h-3 w-3" />
                         ZIP code detected: {detectedZip} - You can continue
                     </div>
                 )}
@@ -628,11 +629,11 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
         }
     };
 
-    const renderIcon = (iconName?: string) => {
+    const renderIcon = (iconName?: string, className: string = "h-8 w-8") => {
         if (!iconName) return null;
         const IconComponent = iconMap[iconName];
         if (!IconComponent) return null;
-        return <IconComponent className="h-8 w-8" />;
+        return <IconComponent className={className} />;
     };
 
     const computeCostSummary = () => {
@@ -878,17 +879,17 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                       ];
 
             return (
-                <div className="space-y-4 w-full max-w-md">
+                <div className="space-y-2 w-full max-w-md">
                     {formFields.map((option) => (
-                        <div key={option.id} className="space-y-2">
-                            <Label htmlFor={option.id}>{option.title}</Label>
+                        <div key={option.id} className="space-y-1">
+                            <Label htmlFor={option.id} className="text-sm">{option.title}</Label>
                             <Input
                                 id={option.id}
                                 type={option.type === 'email' ? 'email' : 'text'}
                                 placeholder={option.description}
                                 value={formData[option.id] || ''}
                                 onChange={(e) => handleInputChange(option.id, e.target.value)}
-                                className="w-full"
+                                className="w-full h-8 text-sm"
                             />
                         </div>
                     ))}
@@ -896,18 +897,32 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
             );
         }
 
-        // Regular option buttons
-        const gridCols = currentStep.layout?.columns || 1;
-        const gridClass = gridCols === 2 ? 'grid-cols-2' : 'grid-cols-1';
+        // Regular option buttons - auto-adjust columns based on number of options
+        let gridCols = currentStep.layout?.columns || 1;
+
+        // Smart auto-adjust for steps with many options
+        // Override configured columns if there are many options
+        if (options.length >= 10) {
+            gridCols = Math.max(gridCols, 3); // At least 3 columns for 10+ options
+        } else if (options.length >= 6) {
+            gridCols = Math.max(gridCols, 2); // At least 2 columns for 6-9 options
+        } else if (options.length >= 4 && !currentStep.layout?.columns) {
+            gridCols = 2; // 2 columns for 4-5 options (only if not explicitly set)
+        }
+
+        const gridClass =
+            gridCols === 3 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' :
+            gridCols === 2 ? 'grid-cols-1 md:grid-cols-2' :
+            'grid-cols-1';
 
         return (
-            <div className={`grid ${gridClass} gap-4 w-full max-w-2xl`}>
+            <div className={`grid ${gridClass} gap-2 w-full max-w-4xl`}>
                 {options.map((option) => (
                     <motion.button
                         key={option.id}
                         onClick={() => handleOptionSelect(option.value)}
                         className={`
-                            relative p-6 rounded-xl border-2 transition-all text-left
+                            relative p-3 rounded-lg border-2 transition-all text-left
                             ${selectedOptions[currentStepKey] === option.value
                                 ? 'border-current bg-current/10'
                                 : 'border-gray-200 hover:border-current hover:bg-gray-50'
@@ -923,13 +938,13 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                                     ? primaryColor
                                     : undefined,
                         }}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
                     >
-                        <div className="flex items-start gap-4">
+                        <div className="flex items-start gap-2">
                             {option.icon && (
                                 <div
-                                    className="flex-shrink-0 rounded-lg p-3"
+                                    className="flex-shrink-0 rounded-md p-2"
                                     style={{
                                         backgroundColor:
                                             selectedOptions[currentStepKey] === option.value
@@ -937,16 +952,16 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                                                 : '#f3f4f6',
                                     }}
                                 >
-                                    {renderIcon(option.icon)}
+                                    {renderIcon(option.icon, 'h-4 w-4')}
                                 </div>
                             )}
                             <div className="flex-1">
-                                <div className="font-semibold text-lg mb-1">{option.title}</div>
+                                <div className="font-semibold text-sm mb-0.5">{option.title}</div>
                                 {option.description && (
-                                    <div className="text-sm text-gray-600">{option.description}</div>
+                                    <div className="text-xs text-gray-600">{option.description}</div>
                                 )}
                                 {option.estimation?.base_price && (
-                                    <div className="mt-2 text-sm font-medium">
+                                    <div className="mt-1 text-xs font-medium">
                                         Starting at {config.estimation_settings?.currency_symbol || '$'}
                                         {option.estimation.base_price}
                                     </div>
@@ -956,13 +971,13 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                                 <motion.div
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
-                                    className="absolute top-3 right-3"
+                                    className="absolute top-2 right-2"
                                 >
                                     <div
-                                        className="rounded-full p-1"
+                                        className="rounded-full p-0.5"
                                         style={{ backgroundColor: primaryColor }}
                                     >
-                                        <Check className="h-4 w-4 text-white" />
+                                        <Check className="h-3 w-3 text-white" />
                                     </div>
                                 </motion.div>
                             )}
@@ -1074,19 +1089,19 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
     }
 
     return (
-        <div className="min-h-screen bg-white text-gray-950 flex items-center justify-center p-4">
-            <Card className="w-full max-w-4xl shadow-2xl bg-white border border-gray-200 text-gray-950">
+        <div className="min-h-screen bg-white text-gray-950 flex items-center justify-center p-2">
+            <Card className="w-full max-w-3xl shadow-2xl bg-white border border-gray-200 text-gray-950">
                 {/* Header */}
                 <div
-                    className="px-8 py-6 border-b"
+                    className="px-4 py-3 border-b"
                     style={{ borderColor: `${primaryColor}30` }}
                 >
                     <div className="flex items-center justify-between">
                         <div>
-                            <h2 className="text-2xl font-bold text-gray-950">
+                            <h2 className="text-lg font-bold text-gray-950">
                                 {config.branding?.company_name || 'Widget Preview'}
                             </h2>
-                            <p className="text-sm text-gray-600 mt-1">
+                            <p className="text-xs text-gray-600 mt-0.5">
                                 Step {currentStepIndex + 1} of {totalSteps}
                             </p>
                         </div>
@@ -1094,13 +1109,13 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                             <img
                                 src={config.branding.logo_url}
                                 alt="Company Logo"
-                                className="h-12"
+                                className="h-8"
                             />
                         )}
                     </div>
 
                     {/* Progress bar */}
-                    <div className="mt-4 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                         <motion.div
                             className="h-full rounded-full"
                             style={{ backgroundColor: primaryColor }}
@@ -1114,7 +1129,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                 </div>
 
                 {/* Content */}
-                <div className="px-8 py-12">
+                <div className="px-4 py-4">
                     {submitStatus.state !== 'idle' && (
                         <div
                             className={`mb-6 text-sm ${
@@ -1137,15 +1152,15 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                             className="flex flex-col items-center"
                         >
                             {/* Step title and subtitle */}
-                            <div className="text-center mb-8 max-w-2xl">
-                                <h3 className="text-3xl font-bold text-gray-950 mb-2">
+                            <div className="text-center mb-4 max-w-2xl">
+                                <h3 className="text-xl font-bold text-gray-950 mb-1">
                                     {currentStep.title}
                                 </h3>
                                 {currentStep.subtitle && (
-                                    <p className="text-lg text-gray-600">{currentStep.subtitle}</p>
+                                    <p className="text-sm text-gray-600">{currentStep.subtitle}</p>
                                 )}
                                 {currentStep.prompt?.message && (
-                                    <p className="text-md text-gray-500 mt-2">
+                                    <p className="text-xs text-gray-500 mt-1">
                                         {currentStep.prompt.message}
                                     </p>
                                 )}
@@ -1155,15 +1170,15 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                             {renderOptions()}
 
                             {currentStepKey === 'review-quote' && (
-                                <div className="w-full max-w-2xl mt-6">
+                                <div className="w-full max-w-2xl mt-3">
                                     <Card className="border border-gray-200 bg-white text-gray-950">
-                                        <div className="p-6 space-y-4">
+                                        <div className="p-3 space-y-2">
                                             <div className="flex items-center justify-between">
-                                                <h4 className="text-xl font-semibold text-gray-950">
+                                                <h4 className="text-base font-semibold text-gray-950">
                                                     Review your moving quote
                                                 </h4>
-                                                <span className="text-sm text-gray-600">
-                                                    Estimated costs based on your selections
+                                                <span className="text-xs text-gray-600">
+                                                    Estimated costs
                                                 </span>
                                             </div>
 
@@ -1180,32 +1195,32 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                                                 }
 
                                                 return (
-                                                    <div className="space-y-3">
+                                                    <div className="space-y-2">
                                                         <div className="divide-y divide-gray-200 border border-gray-200 rounded-lg">
                                                             {summary.items.map((item, idx) => (
-                                                                <div key={idx} className="flex items-start justify-between px-4 py-3">
+                                                                <div key={idx} className="flex items-start justify-between px-2 py-1.5">
                                                                     <div>
-                                                                        <div className="font-medium text-gray-900">{item.label}</div>
+                                                                        <div className="text-sm font-medium text-gray-900">{item.label}</div>
                                                                         {item.meta && (
                                                                             <div className="text-xs text-gray-500">{item.meta}</div>
                                                                         )}
                                                                     </div>
-                                                                    <div className="font-semibold text-gray-900">
+                                                                    <div className="text-sm font-semibold text-gray-900">
                                                                         {currency}{item.amount.toFixed(2)}
                                                                     </div>
                                                                 </div>
                                                             ))}
                                                         </div>
 
-                                                        <div className="flex items-center justify-between pt-2">
-                                                            <div className="text-sm text-gray-600">Subtotal</div>
-                                                            <div className="font-semibold text-gray-900">
+                                                        <div className="flex items-center justify-between pt-1">
+                                                            <div className="text-xs text-gray-600">Subtotal</div>
+                                                            <div className="text-sm font-semibold text-gray-900">
                                                                 {currency}{summary.subtotal.toFixed(2)}
                                                             </div>
                                                         </div>
 
                                                         {summary.appliedMinimum && (
-                                                            <div className="flex items-center justify-between text-sm text-gray-700">
+                                                            <div className="flex items-center justify-between text-xs text-gray-700">
                                                                 <span>Minimum job price</span>
                                                                 <span className="font-semibold">
                                                                     {currency}{summary.minimumJobPrice.toFixed(2)}
@@ -1213,9 +1228,9 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                                                             </div>
                                                         )}
 
-                                                        <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                                                            <div className="text-base font-semibold text-gray-950">Estimated total</div>
-                                                            <div className="text-base font-semibold text-gray-950">
+                                                        <div className="flex items-center justify-between pt-1 border-t border-gray-200">
+                                                            <div className="text-sm font-semibold text-gray-950">Estimated total</div>
+                                                            <div className="text-sm font-semibold text-gray-950">
                                                                 {currency}{summary.total.toFixed(2)}
                                                             </div>
                                                         </div>
@@ -1231,7 +1246,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                 </div>
 
                 {/* Footer with navigation */}
-                <div className="px-8 py-6 border-t bg-gray-50 flex items-center justify-between">
+                <div className="px-4 py-3 border-t bg-gray-50 flex items-center justify-between">
                     <Button
                         variant="outline"
                         onClick={handleBack}
