@@ -106,7 +106,7 @@ class UniversalServiceWidgetSeeder extends Seeder
                 ],
                 'origin-location' => [
                     'title' => 'Where are you moving from?',
-                    'subtitle' => 'Enter your current address for accurate pricing',
+                    'subtitle' => 'Enter address or ZIP code to continue',
                     'address_label' => 'Pickup Address'
                 ],
                 'target-location' => [

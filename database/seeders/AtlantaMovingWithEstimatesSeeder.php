@@ -222,7 +222,7 @@ class AtlantaMovingWithEstimatesSeeder extends Seeder
                 // Origin Location
                 'origin-location' => [
                     'title' => 'Where are you moving from?',
-                    'subtitle' => 'Enter your pickup location so we can provide accurate pricing and logistics',
+                    'subtitle' => 'Enter address or ZIP code to continue',
                     'address_label' => 'Pickup Address'
                 ],
                 

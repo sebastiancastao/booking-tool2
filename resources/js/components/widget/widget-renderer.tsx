@@ -191,6 +191,20 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
         if (currentStep.layout?.type === 'route-calculation') {
             return !!distanceResult;
         }
+
+        // Special handling for origin-location and target-location
+        if (currentStepKey === 'origin-location' || currentStepKey === 'target-location') {
+            const addressValue = currentStepKey === 'origin-location' ? originAddress : destinationAddress;
+            const hasZipCode = extractZipFromText(addressValue);
+            // Allow continue if there's a ZIP code in the input (even without full address selection)
+            if (hasZipCode) {
+                return true;
+            }
+            // Otherwise, check if a selection was made
+            const selection = selectedOptions[currentStepKey];
+            return selection !== undefined && selection !== null && selection !== '';
+        }
+
         const selection = selectedOptions[currentStepKey];
         if (selection === undefined || selection === null) {
             return false;
@@ -296,6 +310,10 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
     const handleAddressInputChange = (value: string, type: 'origin' | 'destination', stepKey?: string) => {
         setPlacesError(null);
         const targetStepKey = stepKey || currentStepKey;
+
+        // Check if the input contains a ZIP code
+        const hasZipCode = extractZipFromText(value);
+
         if (type === 'origin') {
             setOriginAddress(value);
             setFormData((prev) => ({
@@ -304,7 +322,17 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                 'origin-location-field': value,
                 origin: value,
             }));
-            setSelectedOptions((prev) => ({ ...prev, [targetStepKey]: value }));
+            // Only set selectedOptions if there's a ZIP code (to enable continue button)
+            if (hasZipCode) {
+                setSelectedOptions((prev) => ({ ...prev, [targetStepKey]: value }));
+            } else {
+                // Clear the selection if no ZIP code
+                setSelectedOptions((prev) => {
+                    const next = { ...prev };
+                    delete next[targetStepKey];
+                    return next;
+                });
+            }
         } else {
             setDestinationAddress(value);
             setFormData((prev) => ({
@@ -313,7 +341,17 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                 'target-location-field': value,
                 destination: value,
             }));
-            setSelectedOptions((prev) => ({ ...prev, [targetStepKey]: value }));
+            // Only set selectedOptions if there's a ZIP code (to enable continue button)
+            if (hasZipCode) {
+                setSelectedOptions((prev) => ({ ...prev, [targetStepKey]: value }));
+            } else {
+                // Clear the selection if no ZIP code
+                setSelectedOptions((prev) => {
+                    const next = { ...prev };
+                    delete next[targetStepKey];
+                    return next;
+                });
+            }
         }
         void updatePredictions(value, type);
     };
@@ -414,6 +452,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
         const value = type === 'origin' ? originAddress : destinationAddress;
         const predictions = type === 'origin' ? originPredictions : destinationPredictions;
         const inputId = `${type}-address`;
+        const detectedZip = extractZipFromText(value);
 
         return (
             <div className="space-y-2 relative w-full max-w-xl">
@@ -427,6 +466,12 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                     autoComplete="off"
                 />
                 {renderPredictionList(predictions, type)}
+                {detectedZip && (
+                    <div className="text-sm text-green-600 flex items-center gap-1">
+                        <Check className="h-4 w-4" />
+                        ZIP code detected: {detectedZip} - You can continue
+                    </div>
+                )}
             </div>
         );
     };
@@ -692,7 +737,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
             if (currentStepKey === 'origin-location') {
                 return renderAddressField(
                     'origin',
-                    currentStep.title || 'Where are you moving from?',
+                    currentStep.title || 'Include your starting address (with ZIP code)',
                     'Street, City',
                     currentStepKey
                 );
