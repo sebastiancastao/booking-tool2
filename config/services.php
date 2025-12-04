@@ -42,6 +42,14 @@ return [
         'form_id' => env('GRAVITY_FORMS_FORM_ID', '3'),
     ],
 
+    'smart_moving' => [
+        'base_url' => env('SMART_MOVING_BASE_URL'),
+        'api_key' => env('SMART_MOVING_API_KEY'),
+        'company_id' => env('SMART_MOVING_COMPANY_ID'),
+        'lead_source' => env('SMART_MOVING_LEAD_SOURCE', 'Chalk Leads Widget'),
+        'trigger_hosts' => env('SMART_MOVING_TRIGGER_HOSTS', 'furniture-taxi-7l6l.vercel.app'),
+    ],
+
     'google' => [
         'maps_api_key' => env('VITE_GOOGLE_MAPS_API_KEY'),
     ],

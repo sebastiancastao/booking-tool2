@@ -156,6 +156,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
         state: 'idle' | 'sending' | 'success' | 'error';
         message?: string;
         gravityFormsSubmitted?: boolean;
+        smartMovingSubmitted?: boolean;
     }>({ state: 'idle' });
     const [originAddress, setOriginAddress] = useState('');
     const [destinationAddress, setDestinationAddress] = useState('');
@@ -172,6 +173,10 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
     const [destinationPredictions, setDestinationPredictions] = useState<
         Array<{ description: string; place_id: string }>
     >([]);
+    const discountHost = 'furniture-taxi-7l6l.vercel.app';
+    const currentHost =
+        typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : null;
+    const hostDiscount = currentHost === discountHost ? 50 : 0;
 
     // Steps that should remain optional when enforcing required progression
     const optionalStepTitles = [
@@ -541,6 +546,14 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
 
         const csrf = (document.querySelector('meta[name=\"csrf-token\"]') as HTMLMetaElement | null)?.content;
         const xsrf = getCookieValue('XSRF-TOKEN');
+        const sourceHost = (() => {
+            try {
+                return typeof window !== 'undefined' ? window.location.hostname : null;
+            } catch {
+                return null;
+            }
+        })();
+        const referrer = typeof document !== 'undefined' ? document.referrer || null : null;
 
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
@@ -566,6 +579,8 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                     widget_key: config.widget_id,
                     data: formData,
                     summary,
+                    source_host: sourceHost,
+                    referrer,
                 }),
             });
 
@@ -575,26 +590,41 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                     state: 'error',
                     message: 'Quote failed to send. Please try again.',
                     gravityFormsSubmitted: false,
+                    smartMovingSubmitted: false,
                 });
                 return;
             }
 
             const result = await response.json().catch(() => null);
-            if (result?.gravity_forms_submitted) {
+            const smartMovingSubmitted = result?.smart_moving_submitted;
+            const gravitySubmitted = result?.gravity_forms_submitted;
+
+            if (smartMovingSubmitted) {
+                setSubmitStatus({
+                    state: 'success',
+                    message: 'Quote sent and synced to SmartMoving.',
+                    smartMovingSubmitted: true,
+                    gravityFormsSubmitted: !!gravitySubmitted,
+                });
+            } else if (gravitySubmitted) {
                 setSubmitStatus({
                     state: 'success',
                     message: 'Quote sent and synced to Gravity Forms.',
                     gravityFormsSubmitted: true,
+                    smartMovingSubmitted: false,
                 });
             } else {
+                const integrationError =
+                    result?.smart_moving_error || result?.gravity_forms_error || 'Integration submission failed.';
                 setSubmitStatus({
                     state: 'error',
-                    message: result?.gravity_forms_error
-                        ? `Email sent, Gravity Forms failed: ${result.gravity_forms_error}`
-                        : 'Email sent, but Gravity Forms submission failed.',
+                    message: result
+                        ? `Email sent, but lead sync failed: ${integrationError}`
+                        : 'Email sent, but lead sync failed.',
                     gravityFormsSubmitted: false,
+                    smartMovingSubmitted: false,
                 });
-                console.error('Gravity Forms submission failed', result);
+                console.error('Lead integration submission failed', result);
             }
         } catch (error) {
             console.error('Quote email failed to send', error);
@@ -602,6 +632,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                 state: 'error',
                 message: 'Quote failed to send. Please try again.',
                 gravityFormsSubmitted: false,
+                smartMovingSubmitted: false,
             });
         }
     };
@@ -678,6 +709,14 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                 meta: distanceData.miles ? `${distanceData.miles.toFixed(1)} miles` : undefined,
             });
             total += Number(distanceData.estimated_cost) || 0;
+        }
+
+        if (hostDiscount > 0) {
+            items.push({
+                label: 'Furniture Taxi discount',
+                amount: -hostDiscount,
+            });
+            total -= hostDiscount;
         }
 
         const appliedMinimum = total < minimumJobPrice && minimumJobPrice > 0;
