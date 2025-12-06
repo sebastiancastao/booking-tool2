@@ -141,6 +141,9 @@ const iconMap: Record<string, any> = {
     MessageCircle,
 };
 
+const DISCOUNT_HOSTS = ['furniture-taxi-7l6l.vercel.app', 'furnituretaxi.site', 'www.furnituretaxi.site'];
+const HOST_DISCOUNT_AMOUNT = 50;
+
 export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
     const distanceStepKey = Object.keys(config.steps_data || {}).find(
         (key) => config.steps_data[key]?.layout?.type === 'route-calculation'
@@ -173,10 +176,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
     const [destinationPredictions, setDestinationPredictions] = useState<
         Array<{ description: string; place_id: string }>
     >([]);
-    const discountHost = 'furniture-taxi-7l6l.vercel.app';
-    const currentHost =
-        typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : null;
-    const hostDiscount = currentHost === discountHost ? 50 : 0;
+    const [hostDiscount, setHostDiscount] = useState<number>(0);
 
     // Steps that should remain optional when enforcing required progression
     const optionalStepTitles = [
@@ -185,6 +185,41 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
         'Any additional services?',
         'Select Moving Supplies',
     ].map((title) => title.toLowerCase());
+
+    useEffect(() => {
+        const normalizeHost = (value?: string | null) => {
+            if (!value) return null;
+            try {
+                return value.toLowerCase();
+            } catch {
+                return null;
+            }
+        };
+
+        const getReferrerHost = () => {
+            if (typeof document === 'undefined' || !document.referrer) return null;
+            try {
+                return new URL(document.referrer).hostname;
+            } catch {
+                return null;
+            }
+        };
+
+        const candidates = [
+            typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : null,
+            getReferrerHost(),
+        ];
+
+        const hostCandidates = candidates
+            .map((value) => normalizeHost(value))
+            .filter((host): host is string => Boolean(host));
+
+        const hasDiscount = hostCandidates.some((host) =>
+            DISCOUNT_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))
+        );
+
+        setHostDiscount(hasDiscount ? HOST_DISCOUNT_AMOUNT : 0);
+    }, []);
 
     const isStepOptional = (step?: StepData) => {
         if (!step?.title) return false;
