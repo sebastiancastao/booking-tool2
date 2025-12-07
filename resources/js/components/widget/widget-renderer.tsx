@@ -196,29 +196,44 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
             }
         };
 
-        const getReferrerHost = () => {
+        const isInIframe = () => {
+            if (typeof window === 'undefined') return false;
+            try {
+                return window.self !== window.top;
+            } catch {
+                // Cross-origin access to window.top throws when embedded; treat as iframe in that case
+                return true;
+            }
+        };
+
+        const getReferrer = () => {
             if (typeof document === 'undefined' || !document.referrer) return null;
             try {
-                return new URL(document.referrer).hostname;
+                return new URL(document.referrer);
             } catch {
                 return null;
             }
         };
 
+        const referrerUrl = getReferrer();
+        const referrerHost = normalizeHost(referrerUrl?.hostname);
+
         const candidates = [
             typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : null,
-            getReferrerHost(),
+            referrerHost,
         ];
 
         const hostCandidates = candidates
             .map((value) => normalizeHost(value))
             .filter((host): host is string => Boolean(host));
 
-        const hasDiscount = hostCandidates.some((host) =>
+        const allowedHostMatch = hostCandidates.some((host) =>
             DISCOUNT_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))
         );
 
-        setHostDiscount(hasDiscount ? HOST_DISCOUNT_AMOUNT : 0);
+        const shouldApplyDiscount = isInIframe() && allowedHostMatch;
+
+        setHostDiscount(shouldApplyDiscount ? HOST_DISCOUNT_AMOUNT : 0);
     }, []);
 
     const isStepOptional = (step?: StepData) => {
@@ -1259,7 +1274,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                                         <div className="p-3 space-y-2">
                                             <div className="flex items-center justify-between">
                                                 <h4 className="text-base font-semibold text-gray-950">
-                                                    Review your moving quote
+                                                    Review Your Moving Quote
                                                 </h4>
                                                 <span className="text-xs text-gray-600">
                                                     Estimated costs
