@@ -120,11 +120,13 @@ class SmartMovingService
         $explicitNote = $formData['smart_moving_note'] ?? ($data['smart_moving_note'] ?? null);
         $serializedData = json_encode($data, JSON_PRETTY_PRINT);
         $notesSections = [];
+        $affiliateName = null;
 
         if ($explicitNote !== null && $explicitNote !== '') {
             $notesSections[] = is_string($explicitNote)
                 ? trim($explicitNote)
                 : (json_encode($explicitNote, JSON_PRETTY_PRINT) ?: '');
+            $affiliateName = 'discount web form';
         }
         if ($serializedData !== false) {
             $notesSections[] = $serializedData;
@@ -147,6 +149,7 @@ class SmartMovingService
             'estimated_miles' => $miles,
             'widget_key' => $formData['widget_key'] ?? null,
             'notes' => $notes,
+            'affiliateName' => $affiliateName,
         ];
 
         if ($this->companyId) {
