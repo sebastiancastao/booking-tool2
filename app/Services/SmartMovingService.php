@@ -118,6 +118,17 @@ class SmartMovingService
 
         $moveSize = $this->getValue($data, ['moveSize', 'project-scope', 'service-selection', 'service-type', 'location-type']);
         $explicitNote = $formData['smart_moving_note'] ?? ($data['smart_moving_note'] ?? null);
+        $summary = $formData['summary'] ?? null;
+        $summaryItems = is_array($summary) && isset($summary['items']) && is_array($summary['items'])
+            ? $summary['items']
+            : [];
+        $hasDiscountLine = false;
+        foreach ($summaryItems as $item) {
+            if (is_array($item) && isset($item['label']) && stripos((string) $item['label'], 'discount') !== false) {
+                $hasDiscountLine = true;
+                break;
+            }
+        }
         $serializedData = json_encode($data, JSON_PRETTY_PRINT);
         $notesSections = [];
         $affiliateName = null;
@@ -126,6 +137,8 @@ class SmartMovingService
             $notesSections[] = is_string($explicitNote)
                 ? trim($explicitNote)
                 : (json_encode($explicitNote, JSON_PRETTY_PRINT) ?: '');
+            $affiliateName = 'discount web form';
+        } elseif ($hasDiscountLine) {
             $affiliateName = 'discount web form';
         }
         if ($serializedData !== false) {
