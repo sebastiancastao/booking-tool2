@@ -621,6 +621,10 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
 
         try {
             const summary = computeCostSummary();
+            const discountNote =
+                hostDiscount > 0
+                    ? `Discount applied: ${config.estimation_settings?.currency_symbol || '$'}${hostDiscount.toFixed(2)} Furniture Taxi iframe promotion.`
+                    : null;
             const response = await fetch(quotesUrl, {
                 method: 'POST',
                 headers,
@@ -631,6 +635,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                     summary,
                     source_host: sourceHost,
                     referrer,
+                    smart_moving_note: discountNote || undefined,
                 }),
             });
 

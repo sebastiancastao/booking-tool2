@@ -23,6 +23,7 @@ class QuoteController extends Controller
             'summary.appliedMinimum' => 'nullable|boolean',
             'source_host' => 'nullable|string',
             'referrer' => 'nullable|string',
+            'smart_moving_note' => 'nullable|string',
         ]);
 
         $resendKey = config('services.resend.key');

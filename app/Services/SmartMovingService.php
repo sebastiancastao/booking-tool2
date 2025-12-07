@@ -117,7 +117,20 @@ class SmartMovingService
         );
 
         $moveSize = $this->getValue($data, ['moveSize', 'project-scope', 'service-selection', 'service-type', 'location-type']);
-        $notes = json_encode($data, JSON_PRETTY_PRINT);
+        $explicitNote = $formData['smart_moving_note'] ?? ($data['smart_moving_note'] ?? null);
+        $serializedData = json_encode($data, JSON_PRETTY_PRINT);
+        $notesSections = [];
+
+        if ($explicitNote !== null && $explicitNote !== '') {
+            $notesSections[] = is_string($explicitNote)
+                ? trim($explicitNote)
+                : (json_encode($explicitNote, JSON_PRETTY_PRINT) ?: '');
+        }
+        if ($serializedData !== false) {
+            $notesSections[] = $serializedData;
+        }
+
+        $notes = trim(implode("\n\n", array_filter($notesSections, fn($value) => is_string($value) && trim($value) !== '')));
 
         $payload = [
             'lead_source' => $this->leadSource,
