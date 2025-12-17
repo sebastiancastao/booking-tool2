@@ -143,6 +143,88 @@ const iconMap: Record<string, any> = {
 
 const DISCOUNT_HOSTS = ['furniture-taxi-7l6l.vercel.app', 'furnituretaxi.site', 'www.furnituretaxi.site'];
 const HOST_DISCOUNT_AMOUNT = 50;
+const DEFAULT_PRIMARY_COLOR = '#F4C443';
+const DARK_TEXT_COLOR = '#111827';
+const LIGHT_TEXT_COLOR = '#ffffff';
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const parseColorString = (color: string) => {
+    const normalized = color?.trim();
+    if (!normalized) return null;
+
+    if (normalized.startsWith('#')) {
+        const hex = normalized.slice(1);
+        if (![3, 4, 6, 8].includes(hex.length)) return null;
+
+        const expand = (value: string) => (value.length === 1 ? `${value}${value}` : value);
+        let r = '00';
+        let g = '00';
+        let b = '00';
+        let a = 'ff';
+
+        if (hex.length === 3 || hex.length === 4) {
+            [r, g, b] = [hex[0], hex[1], hex[2]].map((v) => expand(v));
+            a = hex.length === 4 ? expand(hex[3]) : 'ff';
+        } else {
+            r = hex.slice(0, 2);
+            g = hex.slice(2, 4);
+            b = hex.slice(4, 6);
+            a = hex.length === 8 ? hex.slice(6, 8) : 'ff';
+        }
+
+        const parsed = [r, g, b, a].map((value) => parseInt(value, 16));
+        if (parsed.some((channel) => Number.isNaN(channel))) return null;
+
+        return {
+            r: parsed[0],
+            g: parsed[1],
+            b: parsed[2],
+            a: parsed[3] / 255,
+        };
+    }
+
+    const rgbMatch = normalized.match(
+        /^rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})(?:\s*,\s*([0-9.]+))?\s*\)$/i
+    );
+
+    if (rgbMatch) {
+        const r = clamp(parseInt(rgbMatch[1], 10), 0, 255);
+        const g = clamp(parseInt(rgbMatch[2], 10), 0, 255);
+        const b = clamp(parseInt(rgbMatch[3], 10), 0, 255);
+        const a = rgbMatch[4] !== undefined ? clamp(parseFloat(rgbMatch[4]), 0, 1) : 1;
+
+        return { r, g, b, a };
+    }
+
+    return null;
+};
+
+const getAccessibleTextColor = (backgroundColor: string) => {
+    const parsed = parseColorString(backgroundColor);
+    if (!parsed) return DARK_TEXT_COLOR;
+
+    const blendChannel = (channel: number, alpha: number) => channel * alpha + 255 * (1 - alpha);
+    const srgbToLinear = (value: number) => {
+        const ratio = value / 255;
+        return ratio <= 0.03928 ? ratio / 12.92 : Math.pow((ratio + 0.055) / 1.055, 2.4);
+    };
+
+    const alpha = clamp(parsed.a ?? 1, 0, 1);
+    const luminance =
+        0.2126 * srgbToLinear(blendChannel(parsed.r, alpha)) +
+        0.7152 * srgbToLinear(blendChannel(parsed.g, alpha)) +
+        0.0722 * srgbToLinear(blendChannel(parsed.b, alpha));
+
+    return luminance > 0.6 ? DARK_TEXT_COLOR : LIGHT_TEXT_COLOR;
+};
+
+const addAlphaToColor = (color: string, alpha: number) => {
+    const parsed = parseColorString(color);
+    if (!parsed) return color;
+    const safeAlpha = clamp(alpha, 0, 1);
+    return `rgba(${parsed.r}, ${parsed.g}, ${parsed.b}, ${safeAlpha})`;
+};
 
 export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
     const distanceStepKey = Object.keys(config.steps_data || {}).find(
@@ -274,7 +356,8 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
     const currentStepKey = stepOrder[currentStepIndex];
     const currentStep = currentStepKey ? config.steps_data[currentStepKey] : undefined;
     const isLastStep = currentStepIndex === totalSteps - 1;
-    const primaryColor = config.branding?.primary_color || '#F4C443';
+    const primaryColor = config.branding?.primary_color || DEFAULT_PRIMARY_COLOR;
+    const primaryTextColor = getAccessibleTextColor(primaryColor);
 
     const extractZipFromText = (text?: string | null) => {
         if (!text) {
@@ -724,8 +807,33 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
 
     const computeCostSummary = () => {
         const items: { label: string; amount: number; meta?: string }[] = [];
+        const percentageLines: { label: string; percent: number; meta?: string }[] = [];
         let total = 0;
-        const minimumJobPrice = Number(config.estimation_settings?.minimum_job_price ?? 0);
+
+        const toNumber = (value: unknown): number | null => {
+            if (value === null || value === undefined) {
+                return null;
+            }
+            if (typeof value === 'number') {
+                return Number.isFinite(value) ? value : null;
+            }
+            if (typeof value === 'string') {
+                const trimmed = value.trim();
+                if (!trimmed) return null;
+                const num = Number(trimmed);
+                return Number.isFinite(num) ? num : null;
+            }
+            return null;
+        };
+
+        const normalizePercent = (value: number): number => {
+            if (!Number.isFinite(value)) return 0;
+            // Support both decimal (0.1) and percentage points (10) inputs.
+            if (Math.abs(value) > 1) return value / 100;
+            return value;
+        };
+
+        const minimumJobPrice = toNumber(config.estimation_settings?.minimum_job_price) ?? 0;
 
         const distanceKey = distanceStepKey || 'distance-calculation';
         const distanceData = formData[distanceKey];
@@ -742,28 +850,81 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                 (opt) => opt.value === selectedValue || opt.id === selectedValue
             );
             const est = option?.estimation;
-            const pricingValue = typeof est?.pricing_value === 'number' ? est.pricing_value : undefined;
-            const basePrice = typeof est?.base_price === 'number' ? est.base_price : undefined;
-            const amount = pricingValue ?? basePrice;
+            const label = option?.title || step.title || stepKey;
+            const meta = option?.description;
 
-            if (amount != null && !Number.isNaN(amount)) {
-                items.push({
-                    label: option?.title || step.title || stepKey,
-                    amount: Number(amount),
-                    meta: option?.description,
-                });
-                total += Number(amount);
+            const pricingType = typeof est?.pricing_type === 'string' ? est.pricing_type : null;
+            const rawPricingValue = toNumber(est?.pricing_value);
+            const rawBasePrice = toNumber(est?.base_price);
+
+            if (pricingType) {
+                const pricingValue = rawPricingValue ?? 0;
+
+                if (pricingType === 'percentage') {
+                    percentageLines.push({
+                        label,
+                        percent: normalizePercent(pricingValue),
+                        meta,
+                    });
+                    continue;
+                }
+
+                if (pricingType === 'discount') {
+                    const discountValue = pricingValue > 0 ? -pricingValue : pricingValue;
+                    if (Math.abs(discountValue) <= 1) {
+                        percentageLines.push({
+                            label,
+                            percent: normalizePercent(discountValue),
+                            meta,
+                        });
+                        continue;
+                    }
+
+                    items.push({ label, amount: discountValue, meta });
+                    total += discountValue;
+                    continue;
+                }
+
+                // Per-unit pricing is treated as a single unit in this renderer unless a unit selector exists.
+                const amount = pricingValue;
+                items.push({ label, amount, meta });
+                total += amount;
+                continue;
+            }
+
+            const amount = rawPricingValue ?? rawBasePrice;
+
+            if (amount != null) {
+                items.push({ label, amount, meta });
+                total += amount;
             }
         }
 
         // distance cost even if the step is hidden
         if (distanceData?.estimated_cost != null) {
+            const distanceCost = toNumber(distanceData.estimated_cost) ?? 0;
+            const miles = toNumber(distanceData.miles);
             items.push({
                 label: 'Travel distance',
-                amount: Number(distanceData.estimated_cost) || 0,
-                meta: distanceData.miles ? `${distanceData.miles.toFixed(1)} miles` : undefined,
+                amount: distanceCost,
+                meta: miles != null ? `${miles.toFixed(1)} miles` : undefined,
             });
-            total += Number(distanceData.estimated_cost) || 0;
+            total += distanceCost;
+        }
+
+        const percentBase = Math.max(0, total);
+        for (const line of percentageLines) {
+            const amount = percentBase * line.percent;
+            if (!Number.isFinite(amount)) {
+                continue;
+            }
+
+            items.push({
+                label: line.label,
+                amount,
+                meta: line.meta,
+            });
+            total += amount;
         }
 
         if (hostDiscount > 0) {
@@ -919,7 +1080,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                             !destinationAddress.trim()
                         }
                         className="flex items-center gap-2"
-                        style={{ backgroundColor: primaryColor }}
+                        style={{ backgroundColor: primaryColor, color: primaryTextColor }}
                     >
                         {distanceStatus === 'loading' ? 'Calculating...' : 'Calculate distance'}
                         <MapPin className="h-4 w-4" />
@@ -1019,75 +1180,75 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
             gridCols === 2 ? 'grid-cols-1 md:grid-cols-2' :
             'grid-cols-1';
 
+        const optionHighlightBackground = addAlphaToColor(primaryColor, 0.12);
+        const optionHighlightTextColor = getAccessibleTextColor(optionHighlightBackground);
+        const optionIconBackground = addAlphaToColor(primaryColor, 0.18);
+
         return (
             <div className={`grid ${gridClass} gap-2 w-full max-w-4xl`}>
-                {options.map((option) => (
-                    <motion.button
-                        key={option.id}
-                        onClick={() => handleOptionSelect(option.value)}
-                        className={`
-                            relative p-3 rounded-lg border-2 transition-all text-left
-                            ${selectedOptions[currentStepKey] === option.value
-                                ? 'border-current bg-current/10'
-                                : 'border-gray-200 hover:border-current hover:bg-gray-50'
-                            }
-                        `}
-                        style={{
-                            borderColor:
-                                selectedOptions[currentStepKey] === option.value
-                                    ? primaryColor
-                                    : undefined,
-                            color:
-                                selectedOptions[currentStepKey] === option.value
-                                    ? primaryColor
-                                    : undefined,
-                        }}
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.99 }}
-                    >
-                        <div className="flex items-start gap-2">
-                            {option.icon && (
-                                <div
-                                    className="flex-shrink-0 rounded-md p-2"
-                                    style={{
-                                        backgroundColor:
-                                            selectedOptions[currentStepKey] === option.value
-                                                ? `${primaryColor}20`
-                                                : '#f3f4f6',
-                                    }}
-                                >
-                                    {renderIcon(option.icon, 'h-4 w-4')}
-                                </div>
-                            )}
-                            <div className="flex-1">
-                                <div className="font-semibold text-sm mb-0.5">{option.title}</div>
-                                {option.description && (
-                                    <div className="text-xs text-gray-600">{option.description}</div>
-                                )}
-                                {option.estimation?.base_price && (
-                                    <div className="mt-1 text-xs font-medium">
-                                        Starting at {config.estimation_settings?.currency_symbol || '$'}
-                                        {option.estimation.base_price}
+                {options.map((option) => {
+                    const isSelected = selectedOptions[currentStepKey] === option.value;
+
+                    return (
+                        <motion.button
+                            key={option.id}
+                            onClick={() => handleOptionSelect(option.value)}
+                            className={`
+                                relative p-3 rounded-lg border-2 transition-all text-left
+                                ${isSelected
+                                    ? 'shadow-sm'
+                                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                }
+                            `}
+                            style={{
+                                borderColor: isSelected ? primaryColor : undefined,
+                                backgroundColor: isSelected ? optionHighlightBackground : undefined,
+                                color: isSelected ? optionHighlightTextColor : undefined,
+                            }}
+                            whileHover={{ scale: 1.01 }}
+                            whileTap={{ scale: 0.99 }}
+                        >
+                            <div className="flex items-start gap-2">
+                                {option.icon && (
+                                    <div
+                                        className="flex-shrink-0 rounded-md p-2"
+                                        style={{
+                                            backgroundColor: isSelected ? optionIconBackground : '#f3f4f6',
+                                        }}
+                                    >
+                                        {renderIcon(option.icon, 'h-4 w-4')}
                                     </div>
+                                )}
+                                <div className="flex-1">
+                                    <div className="font-semibold text-sm mb-0.5">{option.title}</div>
+                                    {option.description && (
+                                        <div className="text-xs text-gray-600">{option.description}</div>
+                                    )}
+                                    {option.estimation?.base_price && (
+                                        <div className="mt-1 text-xs font-medium">
+                                            Starting at {config.estimation_settings?.currency_symbol || '$'}
+                                            {option.estimation.base_price}
+                                        </div>
+                                    )}
+                                </div>
+                                {isSelected && (
+                                    <motion.div
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        className="absolute top-2 right-2"
+                                    >
+                                        <div
+                                            className="rounded-full p-0.5"
+                                            style={{ backgroundColor: primaryColor }}
+                                        >
+                                            <Check className="h-3 w-3" style={{ color: primaryTextColor }} />
+                                        </div>
+                                    </motion.div>
                                 )}
                             </div>
-                            {selectedOptions[currentStepKey] === option.value && (
-                                <motion.div
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    className="absolute top-2 right-2"
-                                >
-                                    <div
-                                        className="rounded-full p-0.5"
-                                        style={{ backgroundColor: primaryColor }}
-                                    >
-                                        <Check className="h-3 w-3 text-white" />
-                                    </div>
-                                </motion.div>
-                            )}
-                        </div>
-                    </motion.button>
-                ))}
+                        </motion.button>
+                    );
+                })}
             </div>
         );
     };
@@ -1355,8 +1516,12 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                         variant="outline"
                         onClick={handleBack}
                         disabled={currentStepIndex === 0}
-                        className="flex items-center gap-2 text-white"
-                        style={{ color: '#ffffff', borderColor: primaryColor }}
+                        className="flex items-center gap-2"
+                        style={{
+                            backgroundColor: primaryColor,
+                            color: LIGHT_TEXT_COLOR,
+                            borderColor: primaryColor,
+                        }}
                     >
                         <ArrowLeft className="h-4 w-4" />
                         Back
@@ -1366,7 +1531,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                         <Button
                             onClick={handleSubmit}
                             className="flex items-center gap-2"
-                            style={{ backgroundColor: primaryColor }}
+                            style={{ backgroundColor: primaryColor, color: primaryTextColor }}
                         >
                             {currentStep.buttons?.primary?.text || 'Submit'}
                             <Check className="h-4 w-4" />
@@ -1375,7 +1540,7 @@ export function WidgetRenderer({ config, onSubmit }: WidgetRendererProps) {
                         <Button
                             onClick={handleNext}
                             className="flex items-center gap-2"
-                            style={{ backgroundColor: primaryColor }}
+                            style={{ backgroundColor: primaryColor, color: primaryTextColor }}
                             disabled={!isStepOptional(currentStep) && !isStepSatisfied()}
                         >
                             {currentStep.buttons?.primary?.text || 'Continue'}

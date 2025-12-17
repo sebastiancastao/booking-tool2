@@ -56,9 +56,31 @@ class WidgetResource extends Resource
                             ->placeholder('e.g., Kitchen Remodeling'),
                         
                         Forms\Components\TextInput::make('domain')
-                            ->url()
-                            ->placeholder('https://your-website.com')
-                            ->helperText('The domain where this widget will be embedded'),
+                            ->maxLength(255)
+                            ->placeholder('example.com or https://example.com')
+                            ->rules([
+                                'nullable',
+                                'string',
+                                'max:255',
+                                function (string $attribute, mixed $value, \Closure $fail): void {
+                                    $value = trim((string) $value);
+
+                                    if ($value === '') {
+                                        return;
+                                    }
+
+                                    if (filter_var($value, FILTER_VALIDATE_URL)) {
+                                        return;
+                                    }
+
+                                    if (filter_var('https://' . $value, FILTER_VALIDATE_URL)) {
+                                        return;
+                                    }
+
+                                    $fail('The domain field must be a valid URL or domain.');
+                                },
+                            ])
+                            ->helperText('The domain where this widget will be embedded (domain or full URL)'),
                         
                         Forms\Components\Select::make('status')
                             ->options([
@@ -93,9 +115,31 @@ class WidgetResource extends Resource
                                 'review-quote' => 'Review Details & Quote (Required)',
                                 'chat-integration' => 'Chat/AI Integration',
                             ])
-                            ->default(['service-selection', 'contact-info', 'review-quote'])
+                            ->default([
+                                'service-selection',
+                                'service-type',
+                                'location-type',
+                                'project-scope',
+                                'date-selection',
+                                'time-selection',
+                                'origin-location',
+                                'origin-challenges',
+                                'target-location',
+                                'target-challenges',
+                                'distance-calculation',
+                                'additional-services',
+                                'supply-inquiry',
+                                'supply-selection',
+                                'contact-info',
+                                'review-quote',
+                                'chat-integration',
+                            ])
+                            ->columns(2)
+                            ->gridDirection('row')
+                            ->bulkToggleable()
                             ->required()
                             ->reactive()
+                            ->dehydrated()
                             ->helperText('Select the modules you want to include in your widget'),
                     ]),
 

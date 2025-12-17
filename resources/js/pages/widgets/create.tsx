@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
+import { getAccessibleTextColor } from '@/lib/colors';
 import { type BreadcrumbItem } from '@/types';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -127,6 +128,7 @@ export default function CreateWidget() {
             secondary_color: '#EC4899',
         },
     });
+    const primaryTextColor = getAccessibleTextColor(data.branding.primary_color);
 
     const nextStep = () => {
         if (currentStep < steps.length) {
@@ -433,15 +435,21 @@ export default function CreateWidget() {
                                                 <div className="bg-white rounded-lg p-4 border">
                                                     <div className="text-center space-y-4">
                                                         <div 
-                                                            className="w-12 h-12 rounded-xl mx-auto flex items-center justify-center text-white"
-                                                            style={{ backgroundColor: data.branding.primary_color }}
+                                                            className="w-12 h-12 rounded-xl mx-auto flex items-center justify-center"
+                                                            style={{
+                                                                backgroundColor: data.branding.primary_color,
+                                                                color: primaryTextColor,
+                                                            }}
                                                         >
                                                             <Sparkles className="w-6 h-6" />
                                                         </div>
                                                         <h5 className="font-semibold">How can we help?</h5>
                                                         <div 
-                                                            className="px-4 py-2 rounded-lg text-white text-sm font-medium"
-                                                            style={{ backgroundColor: data.branding.primary_color }}
+                                                            className="px-4 py-2 rounded-lg text-sm font-medium"
+                                                            style={{
+                                                                backgroundColor: data.branding.primary_color,
+                                                                color: primaryTextColor,
+                                                            }}
                                                         >
                                                             Get Started
                                                         </div>

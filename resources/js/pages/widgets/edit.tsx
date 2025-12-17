@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
+import { getAccessibleTextColor } from '@/lib/colors';
 import { type BreadcrumbItem } from '@/types';
 
 interface EditWidgetProps {
@@ -147,6 +148,7 @@ export default function EditWidget({ widget }: EditWidgetProps) {
             secondary_color: widget.branding?.secondary_color || '#EC4899',
         },
     });
+    const primaryTextColor = getAccessibleTextColor(data.branding.primary_color);
 
     const nextStep = () => {
         if (currentStep < steps.length) {
@@ -160,15 +162,17 @@ export default function EditWidget({ widget }: EditWidgetProps) {
         }
     };
 
-    const handleModuleToggle = (moduleId: string, required = false) => {
+    const handleModuleToggle = (moduleId: string, required = false, isChecked?: boolean) => {
         if (required) return; // Can't toggle required modules
-        
-        const currentModules = data.enabled_modules;
-        if (currentModules.includes(moduleId)) {
-            setData('enabled_modules', currentModules.filter(id => id !== moduleId));
-        } else {
-            setData('enabled_modules', [...currentModules, moduleId]);
-        }
+
+        const currentModules = data.enabled_modules || [];
+        const shouldEnable = isChecked !== undefined ? isChecked : !currentModules.includes(moduleId);
+
+        const nextModules = shouldEnable
+            ? (currentModules.includes(moduleId) ? currentModules : [...currentModules, moduleId])
+            : currentModules.filter((id) => id !== moduleId);
+
+        setData('enabled_modules', nextModules);
     };
 
     const handleSubmit = () => {
@@ -265,7 +269,7 @@ export default function EditWidget({ widget }: EditWidgetProps) {
                         exit={{ opacity: 0, x: -20 }}
                         transition={{ duration: 0.3 }}
                     >
-                        <Card className="p-8 shadow-xl border-0 bg-white/90 backdrop-blur-sm">
+                        <Card className="p-8 shadow-xl border-0 bg-white/90 backdrop-blur-sm text-gray-900">
                             <div className="mb-8">
                                 <h2 className="text-2xl font-bold text-gray-900 mb-2">{steps[currentStep - 1].title}</h2>
                                 <p className="text-gray-600">{steps[currentStep - 1].subtitle}</p>
@@ -389,7 +393,9 @@ export default function EditWidget({ widget }: EditWidgetProps) {
                                                         <Checkbox
                                                             checked={data.enabled_modules.includes(module.id)}
                                                             disabled={module.required}
-                                                            onClick={() => handleModuleToggle(module.id, module.required)}
+                                                            onCheckedChange={(checked) =>
+                                                                handleModuleToggle(module.id, module.required, checked === true)
+                                                            }
                                                         />
                                                         <div className="flex-1">
                                                             <div className="flex items-center space-x-2">
@@ -469,15 +475,21 @@ export default function EditWidget({ widget }: EditWidgetProps) {
                                                 <div className="bg-white rounded-lg p-4 border">
                                                     <div className="text-center space-y-4">
                                                         <div 
-                                                            className="w-12 h-12 rounded-xl mx-auto flex items-center justify-center text-white"
-                                                            style={{ backgroundColor: data.branding.primary_color }}
+                                                            className="w-12 h-12 rounded-xl mx-auto flex items-center justify-center"
+                                                            style={{
+                                                                backgroundColor: data.branding.primary_color,
+                                                                color: primaryTextColor,
+                                                            }}
                                                         >
                                                             <Sparkles className="w-6 h-6" />
                                                         </div>
                                                         <h5 className="font-semibold">How can we help?</h5>
                                                         <div 
-                                                            className="px-4 py-2 rounded-lg text-white text-sm font-medium"
-                                                            style={{ backgroundColor: data.branding.primary_color }}
+                                                            className="px-4 py-2 rounded-lg text-sm font-medium"
+                                                            style={{
+                                                                backgroundColor: data.branding.primary_color,
+                                                                color: primaryTextColor,
+                                                            }}
                                                         >
                                                             Get Started
                                                         </div>
@@ -543,7 +555,7 @@ export default function EditWidget({ widget }: EditWidgetProps) {
                                     variant="outline"
                                     onClick={prevStep}
                                     disabled={currentStep === 1}
-                                    className="flex items-center"
+                                    className="flex items-center text-gray-900"
                                 >
                                     <ArrowLeft className="w-4 h-4 mr-2" />
                                     Previous
@@ -554,7 +566,7 @@ export default function EditWidget({ widget }: EditWidgetProps) {
                                         <Button
                                             onClick={nextStep}
                                             disabled={!canProceed()}
-                                            className="btn-chalk-gradient flex items-center"
+                                            className="btn-chalk-gradient flex items-center text-white"
                                         >
                                             Continue
                                             <ArrowRight className="w-4 h-4 ml-2" />
@@ -563,7 +575,7 @@ export default function EditWidget({ widget }: EditWidgetProps) {
                                         <Button
                                             onClick={handleSubmit}
                                             disabled={processing || !canProceed()}
-                                            className="btn-chalk-gradient flex items-center"
+                                            className="btn-chalk-gradient flex items-center text-white"
                                         >
                                             {processing ? 'Saving...' : 'Save Changes'}
                                             <Save className="w-4 h-4 ml-2" />

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class Widget extends Model
@@ -27,10 +28,17 @@ class Widget extends Model
     ];
 
     protected $casts = [
-        'enabled_modules' => 'array',
-        'module_configs' => 'array',
-        'branding' => 'array',
-        'settings' => 'array',
+        'enabled_modules' => 'json',
+        'module_configs' => 'json',
+        'branding' => 'json',
+        'settings' => 'json',
+    ];
+
+    protected $attributes = [
+        'enabled_modules' => '[]',
+        'module_configs' => '{}',
+        'branding' => '{}',
+        'settings' => '{}',
     ];
 
     protected static function boot()
@@ -41,6 +49,32 @@ class Widget extends Model
             if (empty($widget->widget_key)) {
                 $widget->widget_key = Str::random(32);
             }
+        });
+
+        static::saving(function (self $widget) {
+            if (! config('app.debug')) {
+                return;
+            }
+
+            $dirty = $widget->getDirty();
+
+            Log::info('=== WIDGET MODEL: saving ===', [
+                'id' => $widget->id,
+                'exists' => $widget->exists,
+                'dirty_keys' => array_keys($dirty),
+            ]);
+        });
+
+        static::saved(function (self $widget) {
+            if (! config('app.debug')) {
+                return;
+            }
+
+            Log::info('=== WIDGET MODEL: saved ===', [
+                'id' => $widget->id,
+                'enabled_modules_count' => is_array($widget->enabled_modules) ? count($widget->enabled_modules) : null,
+                'module_configs_keys_count' => is_array($widget->module_configs) ? count($widget->module_configs) : null,
+            ]);
         });
     }
 

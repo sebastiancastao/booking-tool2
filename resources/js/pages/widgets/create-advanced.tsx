@@ -27,6 +27,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { getAccessibleTextColor } from '@/lib/colors';
 import { type BreadcrumbItem } from '@/types';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -221,6 +222,7 @@ const steps = [
 export default function CreateAdvancedWidget() {
     const [currentStep, setCurrentStep] = useState(1);
     const [expandedModules, setExpandedModules] = useState<string[]>([]);
+    const isDebug = import.meta.env.DEV;
     
     const { data, setData, post, processing, errors } = useForm<CreateWidgetForm>({
         name: '',
@@ -241,6 +243,7 @@ export default function CreateAdvancedWidget() {
             show_price_ranges: true,
         },
     });
+    const primaryTextColor = getAccessibleTextColor(data.branding.primary_color);
 
     const nextStep = () => {
         if (currentStep < steps.length) {
@@ -425,8 +428,41 @@ export default function CreateAdvancedWidget() {
     };
 
     const handleSubmit = () => {
+        if (isDebug) console.log('[widgets.create-advanced] submit', { data });
+
         post(route('widgets.store'), {
+            onStart: () => {
+                if (isDebug) console.log('[widgets.create-advanced] request started');
+            },
+            onError: (formErrors) => {
+                if (isDebug) console.error('[widgets.create-advanced] request failed', formErrors);
+
+                const errorKeys = Object.keys(formErrors ?? {});
+                if (errorKeys.length === 0) return;
+
+                const step1Keys = new Set([
+                    'name',
+                    'service_category',
+                    'service_subcategory',
+                    'company_name',
+                    'domain',
+                ]);
+
+                const hasStep1Error = errorKeys.some((key) => step1Keys.has(key));
+                const hasStep2Error = errorKeys.includes('enabled_modules');
+                const hasStep3Error = errorKeys.some((key) => key === 'module_configs' || key.startsWith('module_configs.'));
+                const hasStep4Error = errorKeys.some((key) => key.startsWith('branding.') || key.startsWith('settings.'));
+
+                if (hasStep1Error) setCurrentStep(1);
+                else if (hasStep2Error) setCurrentStep(2);
+                else if (hasStep3Error) setCurrentStep(3);
+                else if (hasStep4Error) setCurrentStep(4);
+            },
+            onFinish: () => {
+                if (isDebug) console.log('[widgets.create-advanced] request finished');
+            },
             onSuccess: () => {
+                if (isDebug) console.log('[widgets.create-advanced] request succeeded');
                 window.location.href = route('dashboard');
             },
         });
@@ -738,6 +774,17 @@ export default function CreateAdvancedWidget() {
                                 <p className="text-gray-600">{steps[currentStep - 1].subtitle}</p>
                             </div>
 
+                            {isDebug && Object.keys(errors).length > 0 && (
+                                <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
+                                    <div className="text-sm font-semibold text-red-800">
+                                        Debug: Create blocked by validation errors
+                                    </div>
+                                    <pre className="mt-2 max-h-48 overflow-auto text-xs text-red-900">
+                                        {JSON.stringify(errors, null, 2)}
+                                    </pre>
+                                </div>
+                            )}
+
                             <AnimatePresence mode="wait">
                                 {/* Step 1: Basic Details */}
                                 {currentStep === 1 && (
@@ -992,15 +1039,21 @@ export default function CreateAdvancedWidget() {
                                                     <div className="bg-white rounded-lg p-4 border">
                                                         <div className="text-center space-y-4">
                                                             <div 
-                                                                className="w-12 h-12 rounded-xl mx-auto flex items-center justify-center text-white"
-                                                                style={{ backgroundColor: data.branding.primary_color }}
+                                                                className="w-12 h-12 rounded-xl mx-auto flex items-center justify-center"
+                                                                style={{
+                                                                    backgroundColor: data.branding.primary_color,
+                                                                    color: primaryTextColor,
+                                                                }}
                                                             >
                                                                 <Sparkles className="w-6 h-6" />
                                                             </div>
                                                             <h5 className="font-semibold">How can we help?</h5>
                                                             <div 
-                                                                className="px-4 py-2 rounded-lg text-white text-sm font-medium"
-                                                                style={{ backgroundColor: data.branding.primary_color }}
+                                                                className="px-4 py-2 rounded-lg text-sm font-medium"
+                                                                style={{
+                                                                    backgroundColor: data.branding.primary_color,
+                                                                    color: primaryTextColor,
+                                                                }}
                                                             >
                                                                 Get Started
                                                             </div>

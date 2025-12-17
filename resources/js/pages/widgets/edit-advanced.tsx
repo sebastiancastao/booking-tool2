@@ -245,6 +245,7 @@ export default function EditAdvancedWidget({ widget }: EditAdvancedWidgetProps) 
     const [currentStep, setCurrentStep] = useState(1);
     const [selectedModule, setSelectedModule] = useState<string | null>(null);
     const [expandedModules, setExpandedModules] = useState<string[]>([]);
+    const isDebug = import.meta.env.DEV;
     
     const { data, setData, put, processing, errors } = useForm<EditWidgetForm>({
         name: widget.name || '',
@@ -572,8 +573,41 @@ export default function EditAdvancedWidget({ widget }: EditAdvancedWidgetProps) 
     };
 
     const handleSubmit = () => {
+        if (isDebug) console.log('[widgets.edit-advanced] submit', { widgetId: widget.id, data });
+
         put(route('widgets.update', widget.id), {
+            onStart: () => {
+                if (isDebug) console.log('[widgets.edit-advanced] request started');
+            },
+            onError: (formErrors) => {
+                if (isDebug) console.error('[widgets.edit-advanced] request failed', formErrors);
+
+                const errorKeys = Object.keys(formErrors ?? {});
+                if (errorKeys.length === 0) return;
+
+                const step1Keys = new Set([
+                    'name',
+                    'service_category',
+                    'service_subcategory',
+                    'company_name',
+                    'domain',
+                ]);
+
+                const hasStep1Error = errorKeys.some((key) => step1Keys.has(key));
+                const hasStep2Error = errorKeys.includes('enabled_modules');
+                const hasStep3Error = errorKeys.some((key) => key === 'module_configs' || key.startsWith('module_configs.'));
+                const hasStep4Error = errorKeys.some((key) => key.startsWith('branding.') || key.startsWith('settings.'));
+
+                if (hasStep1Error) setCurrentStep(1);
+                else if (hasStep2Error) setCurrentStep(2);
+                else if (hasStep3Error) setCurrentStep(3);
+                else if (hasStep4Error) setCurrentStep(4);
+            },
+            onFinish: () => {
+                if (isDebug) console.log('[widgets.edit-advanced] request finished');
+            },
             onSuccess: () => {
+                if (isDebug) console.log('[widgets.edit-advanced] request succeeded');
                 window.location.href = route('dashboard');
             },
         });
@@ -1018,11 +1052,22 @@ export default function EditAdvancedWidget({ widget }: EditAdvancedWidgetProps) 
                         exit={{ opacity: 0, x: -20 }}
                         transition={{ duration: 0.3 }}
                     >
-                        <Card className="p-8 shadow-xl border-0 bg-white/90 backdrop-blur-sm">
+                        <Card className="p-8 shadow-xl border-0 bg-white/90 backdrop-blur-sm text-gray-900">
                             <div className="mb-8">
                                 <h2 className="text-2xl font-bold text-gray-900 mb-2">{steps[currentStep - 1].title}</h2>
                                 <p className="text-gray-600">{steps[currentStep - 1].subtitle}</p>
                             </div>
+
+                            {isDebug && Object.keys(errors).length > 0 && (
+                                <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
+                                    <div className="text-sm font-semibold text-red-800">
+                                        Debug: Save blocked by validation errors
+                                    </div>
+                                    <pre className="mt-2 max-h-48 overflow-auto text-xs text-red-900">
+                                        {JSON.stringify(errors, null, 2)}
+                                    </pre>
+                                </div>
+                            )}
 
                             <AnimatePresence mode="wait">
                                 {/* Step 1: Basic Details */}

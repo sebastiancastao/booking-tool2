@@ -1,6 +1,6 @@
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Eye, Code, Smartphone, Monitor, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Eye, Code, Smartphone, Monitor, ExternalLink, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { WidgetRenderer } from '@/components/widget/widget-renderer';
@@ -13,14 +13,17 @@ interface WidgetPreviewProps {
         name: string;
         widget_key: string;
         status: string;
+        updated_at?: string;
     };
     config: any;
+    timestamp?: number;
 }
 
-export default function WidgetPreview({ widget, config }: WidgetPreviewProps) {
+export default function WidgetPreview({ widget, config, timestamp }: WidgetPreviewProps) {
     const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop');
     const [showCode, setShowCode] = useState(false);
     const [iframeEmbedUrl, setIframeEmbedUrl] = useState('');
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Dashboard', href: '/dashboard' },
@@ -64,6 +67,17 @@ export default function WidgetPreview({ widget, config }: WidgetPreviewProps) {
         alert('Iframe embed code copied to clipboard!');
     };
 
+    const handleRefreshData = () => {
+        setIsRefreshing(true);
+        // Force Inertia to reload the page data from the server
+        router.reload({
+            only: ['widget', 'config', 'timestamp'],
+            onFinish: () => {
+                setIsRefreshing(false);
+            },
+        });
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Preview: ${widget.name}`} />
@@ -89,6 +103,16 @@ export default function WidgetPreview({ widget, config }: WidgetPreviewProps) {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {/* Refresh data button */}
+                        <Button
+                            variant="outline"
+                            onClick={handleRefreshData}
+                            disabled={isRefreshing}
+                        >
+                            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                            {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+                        </Button>
+
                         {/* View mode toggle */}
                         <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
                             <button
@@ -185,6 +209,11 @@ export default function WidgetPreview({ widget, config }: WidgetPreviewProps) {
                             <p className="text-sm text-gray-600 mt-1">
                                 Interact with your widget exactly as your customers will see it
                             </p>
+                            {timestamp && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Data loaded: {new Date(timestamp * 1000).toLocaleTimeString()}
+                                </p>
+                            )}
                         </div>
 
                         {/* Preview container with responsive sizing */}

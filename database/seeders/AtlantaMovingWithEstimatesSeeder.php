@@ -233,11 +233,10 @@ class AtlantaMovingWithEstimatesSeeder extends Seeder
                     'options' => [
                         [
                             'title' => 'Stairs (flights)',
-                            'description' => 'Additional $45 per flight (max 10 flights)',
+                            'description' => 'Adds 10% to the total price',
                             'icon' => 'ArrowUp',
-                            'pricing_type' => 'per_unit',
-                            'pricing_value' => 45,
-                            'max_units' => 10
+                            'pricing_type' => 'percentage',
+                            'pricing_value' => 0.10
                         ],
                         [
                             'title' => 'Elevator available',
@@ -291,11 +290,10 @@ class AtlantaMovingWithEstimatesSeeder extends Seeder
                     'options' => [
                         [
                             'title' => 'Stairs (flights)',
-                            'description' => 'Additional $45 per flight (max 10 flights)',
+                            'description' => 'Adds 10% to the total price',
                             'icon' => 'ArrowUp',
-                            'pricing_type' => 'per_unit',
-                            'pricing_value' => 45,
-                            'max_units' => 10
+                            'pricing_type' => 'percentage',
+                            'pricing_value' => 0.10
                         ],
                         [
                             'title' => 'Elevator available',
